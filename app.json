@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "scoreBoard-pro",
-    "slug": "scoreBoard-pro",
-    "version": "2.0.4",
+    "slug": "multi-scoreboard",
+    "version": "2.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "multiscoreboard",
@@ -34,12 +34,11 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-8391520865775051~5293934796",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511",
           "userTrackingUsageDescription": "Cet identifiant sera utilisé pour vous proposer des publicités personnalisées."
         }
-      ],
-      "expo-web-browser"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

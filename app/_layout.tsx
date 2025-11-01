@@ -4,6 +4,15 @@ import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import {
+  BannerAd,
+  BannerAdSize,
+  TestIds,
+} from "react-native-google-mobile-ads";
+
+// --- AdMob: vrai unitId en prod, TestIds en dev (depuis ton ancienne app)
+const REAL_BANNER_UNIT_ID = "ca-app-pub-8391520865775051/5872519298";
+const bannerUnitId = __DEV__ ? TestIds.BANNER : REAL_BANNER_UNIT_ID;
 
 export default function RootLayout() {
   const pathname = usePathname();
@@ -48,6 +57,18 @@ export default function RootLayout() {
   return (
     <View style={{ flex: 1 }}>
       <Slot />
+
+      {/* --- Bandeau publicitaire en bas --- */}
+      <View style={styles.bannerContainer}>
+        <BannerAd
+          unitId={bannerUnitId}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          onAdLoaded={() => console.log("Ad loaded")}
+          onAdFailedToLoad={(err) => console.log("Ad failed", err)}
+        />
+      </View>
+
+      {/* --- Bouton rotation --- */}
       <View pointerEvents="box-none" style={styles.overlay}>
         <TouchableOpacity
           style={styles.rotationBtn}
@@ -65,6 +86,14 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  bannerContainer: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingBottom: Platform.OS === "ios" ? 20 : 0,
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
