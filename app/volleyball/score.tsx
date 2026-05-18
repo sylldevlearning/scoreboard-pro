@@ -1,4 +1,3 @@
-// VolleyballScore.tsx
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -8,15 +7,14 @@ import {
   Modal,
   TextInput,
   Pressable,
-  Button,
   useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
+import SettingsModal from "@/components/SettingsModal";
 
 type VolleyballSave = {
   scoreA: number; scoreB: number;
@@ -48,14 +46,11 @@ export default function VolleyballScore() {
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
 
   const persist = usePersistedScore<VolleyballSave>("volleyball");
-
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
 
-  // Auto-save scores to AsyncStorage
   useEffect(() => {
     if (!persist.isLoaded) return;
     persist.save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory });
@@ -72,22 +67,19 @@ export default function VolleyballScore() {
   }, [persist]);
 
   useEffect(() => {
-    return () => {
-      sound?.unloadAsync();
-    };
+    return () => { sound?.unloadAsync(); };
   }, [sound]);
 
-  const playBuzz = async () => {
-    const { sound } = await Audio.Sound.createAsync(
+  const playBuzz = useCallback(async () => {
+    const { sound: s } = await Audio.Sound.createAsync(
       require("../../assets/buzzer.mp3")
     );
-    setSound(sound);
-    await sound.playAsync();
-  };
+    setSound(s);
+    await s.playAsync();
+  }, []);
 
   const startTimeout = useCallback((team: "A" | "B") => {
-    if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0))
-      return;
+    if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0)) return;
 
     playBuzz();
     setIsTimeout(true);
@@ -140,7 +132,6 @@ export default function VolleyballScore() {
       const newSetsA = wonByA ? setsA + 1 : setsA;
       const newSetsB = wonByA ? setsB : setsB + 1;
 
-      // Ajout à l'historique
       setSetsHistory((prev) => [...prev, `${newScoreA}-${newScoreB}`]);
       setResultatSets(() => [`${newScoreA}-${newScoreB}`]);
 
@@ -178,88 +169,59 @@ export default function VolleyballScore() {
         onDiscard={persist.clear}
       />
 
-      {/* Modal paramètres */}
-      <Modal visible={showModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
+      {/* MODAL paramètres */}
+      <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetScores}>
+        <TextInput
+          placeholder="Nom équipe A"
+          value={teamA}
+          onChangeText={setTeamA}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Nom équipe B"
+          value={teamB}
+          onChangeText={setTeamB}
+          style={styles.input}
+        />
+        <Text style={styles.inputTitle}>Score de départ</Text>
+        <TextInput
+          keyboardType="number-pad"
+          value={String(startScore)}
+          onChangeText={(text) => {
+            const val = Number(text);
+            setStartScore(val);
+            setScoreA(val);
+            setScoreB(val);
+          }}
+          style={styles.input}
+        />
+        <Text style={styles.inputTitle}>Sets gagnants</Text>
+        <TextInput
+          keyboardType="number-pad"
+          value={String(nbSetsToWin)}
+          onChangeText={(text) => setNbSetsToWin(Number(text))}
+          style={styles.input}
+        />
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+          <Text style={{ color: "#fff", marginRight: 10 }}>Tie-break auto</Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: tieBreakEnabled ? "#4caf50" : "#ccc",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 5,
+            }}
+            onPress={() => setTieBreakEnabled(!tieBreakEnabled)}
           >
-            <Text style={styles.modalTitle}>Paramètres</Text>
-            <TextInput
-              placeholder="Nom équipe A"
-              value={teamA}
-              onChangeText={setTeamA}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Nom équipe B"
-              value={teamB}
-              onChangeText={setTeamB}
-              style={styles.input}
-            />
-            <Text style={styles.inputTitle}>Score de départ</Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={String(startScore)}
-              onChangeText={(text) => {
-                const val = Number(text);
-                setStartScore(val);
-                setScoreA(val);
-                setScoreB(val);
-              }}
-              style={styles.input}
-            />
-            <Text style={styles.inputTitle}>Sets gagnants</Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={String(nbSetsToWin)}
-              onChangeText={(text) => setNbSetsToWin(Number(text))}
-              style={styles.input}
-            />
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <Text style={{ color: "#fff", marginRight: 10 }}>
-                Tie-break auto
-              </Text>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: tieBreakEnabled ? "#4caf50" : "#ccc",
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 5,
-                }}
-                onPress={() => setTieBreakEnabled(!tieBreakEnabled)}
-              >
-                <Text style={{ color: "#000" }}>
-                  {tieBreakEnabled ? "Oui" : "Non"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalButtons}>
-              <Button title="🏠 " onPress={() => router.push("/")} />
-              <Button title="🔁 Réinitialiser" onPress={resetScores} />
-              <Button title="✅ " onPress={() => setShowModal(false)} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+            <Text style={{ color: "#000" }}>{tieBreakEnabled ? "Oui" : "Non"}</Text>
+          </TouchableOpacity>
+        </View>
+      </SettingsModal>
 
       {/* Modal fin de set */}
       <Modal visible={!!winner} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setWinner(null)}>
-          <Pressable
-            style={styles.resultBox}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <Pressable style={styles.resultBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.resultText}>
               Set gagné par {winner}: {resultatSets}{" "}
             </Text>
@@ -273,25 +235,21 @@ export default function VolleyballScore() {
           style={styles.overlay}
           onPress={() => {
             setMatchWinner(null);
-            resetScores(); // Réinitialisation complète après fermeture du message
+            resetScores();
           }}
         >
-          <Pressable
-            style={styles.resultBox}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <Pressable style={styles.resultBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.resultText}>{matchWinner}</Text>
             <Text style={styles.setsRecap}>{setsHistory.join("  ")}</Text>
-            <Button title="✅" onPress={() => setMatchWinner(null)} />
+            <TouchableOpacity onPress={() => setMatchWinner(null)}>
+              <Text style={styles.closeBtnText}>✅</Text>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
 
       {/* Bouton paramètres */}
-      <TouchableOpacity
-        style={styles.burger}
-        onPress={() => setShowModal(true)}
-      >
+      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
         <FontAwesome5 name="volleyball-ball" size={44} color="white" />
         <Text style={{ fontSize: 44, color: "white" }}>☰</Text>
       </TouchableOpacity>
@@ -303,9 +261,7 @@ export default function VolleyballScore() {
       ].map(([team, name, score, sets, timeouts]) => (
         <View key={team} style={styles.teamBox}>
           <Text style={styles.teamName}>{name}</Text>
-          <TouchableOpacity
-            onPress={() => handleScoreChange(team as "A" | "B", -1)}
-          >
+          <TouchableOpacity onPress={() => handleScoreChange(team as "A" | "B", -1)}>
             <MaterialCommunityIcons name="eraser" size={32} color="white" />
           </TouchableOpacity>
           <TouchableOpacity
@@ -385,24 +341,6 @@ const styles = StyleSheet.create({
     left: "48%",
     zIndex: 10,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBox: {
-    backgroundColor: "#222",
-    padding: 20,
-    borderRadius: 12,
-    width: "80%",
-  },
-  modalTitle: {
-    fontSize: 22,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "center",
-  },
   inputTitle: {
     fontSize: 12,
     color: "#fff",
@@ -415,11 +353,6 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 6,
     marginBottom: 10,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
   },
   overlay: {
     flex: 1,
@@ -443,5 +376,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     textAlign: "center",
     marginBottom: 10,
+  },
+  closeBtnText: {
+    fontSize: 24,
+    color: "#fff",
   },
 });

@@ -4,16 +4,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   TextInput,
-  Pressable,
-  Button,
   useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
+import SettingsModal from "@/components/SettingsModal";
 
 type TennisSave = {
   scoreA: TennisScore; scoreB: TennisScore;
@@ -42,7 +39,6 @@ export default function TennisScore() {
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
   const [isTieBreak, setIsTieBreak] = useState(false);
 
-  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const scoreOrder = [0, 15, 30, 40];
@@ -64,7 +60,7 @@ export default function TennisScore() {
     setIsTieBreak(data.isTieBreak);
   }, [persist]);
 
-  const resetMatch = () => {
+  const resetMatch = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
     setGamesA(0);
@@ -73,7 +69,7 @@ export default function TennisScore() {
     setSetsB(0);
     setSetsHistory([]);
     setIsTieBreak(false);
-  };
+  }, []);
 
   const nextScore = (current: TennisScore): TennisScore => {
     const index = scoreOrder.indexOf(current as number);
@@ -139,7 +135,6 @@ export default function TennisScore() {
     const newGamesA = team === "A" ? gamesA + 1 : gamesA;
     const newGamesB = team === "B" ? gamesB + 1 : gamesB;
 
-    // 👉 1. D’abord : vérifier si on entre en tie-break
     if (
       tieBreakEnabled &&
       newGamesA === gamesToWinSet &&
@@ -153,11 +148,10 @@ export default function TennisScore() {
       return;
     }
 
-    // 👉 2. Puis : vérifier si un joueur gagne le set (2 jeux d’écart)
     if (
       (newGamesA >= gamesToWinSet || newGamesB >= gamesToWinSet) &&
       Math.abs(newGamesA - newGamesB) >= 2 &&
-      !isTieBreak // ✅ ne jamais clore un set ici si on est déjà en tie-break
+      !isTieBreak
     ) {
       finSet(newGamesA, newGamesB);
       setScoreA(0);
@@ -165,7 +159,6 @@ export default function TennisScore() {
       return;
     }
 
-    // 👉 3. Sinon, mise à jour simple
     setGamesA(newGamesA);
     setGamesB(newGamesB);
     setScoreA(0);
@@ -203,78 +196,53 @@ export default function TennisScore() {
         onResume={handleResume}
         onDiscard={persist.clear}
       />
-      <Modal visible={showModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.modalTitle}>Paramètres</Text>
-            <TextInput
-              placeholder="Nom Joueur A"
-              value={teamA}
-              onChangeText={setTeamA}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Nom Joueur B"
-              value={teamB}
-              onChangeText={setTeamB}
-              style={styles.input}
-            />
-            <Text style={styles.inputTitle}>Nombre de sets gagnants</Text>
-            <TextInput
-              placeholder="Nombre de sets gagnants"
-              value={String(setsToWin)}
-              onChangeText={(text) => setSetsToWin(Number(text))}
-              keyboardType="numeric"
-              style={styles.input}
-            />
-            <Text style={styles.inputTitle}>Nombre de jeux gagnants</Text>
-            <TextInput
-              placeholder="Jeux pour gagner un set"
-              value={String(gamesToWinSet)}
-              onChangeText={(text) => setGamesToWinSet(Number(text))}
-              keyboardType="numeric"
-              style={styles.input}
-            />
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginVertical: 10,
-              }}
-            >
-              <Text style={[styles.inputTitle, { flex: 1 }]}>
-                Activer le tie-break
-              </Text>
-              <TouchableOpacity
-                onPress={() => setTieBreakEnabled(!tieBreakEnabled)}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderWidth: 1,
-                  borderColor: "#fff",
-                  backgroundColor: tieBreakEnabled ? "green" : "#fff",
-                }}
-              />
-            </View>
-            <View style={styles.modalButtons}>
-              <Button title="🏠 " onPress={() => router.push("/")} />
-              <Button title="🔁 Réinitialiser" onPress={resetMatch} />
-              <Button title="✅ " onPress={() => setShowModal(false)} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
-      <TouchableOpacity
-        style={styles.burger}
-        onPress={() => setShowModal(true)}
-      >
+      {/* MODAL */}
+      <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
+        <TextInput
+          placeholder="Nom Joueur A"
+          value={teamA}
+          onChangeText={setTeamA}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Nom Joueur B"
+          value={teamB}
+          onChangeText={setTeamB}
+          style={styles.input}
+        />
+        <Text style={styles.inputTitle}>Nombre de sets gagnants</Text>
+        <TextInput
+          placeholder="Nombre de sets gagnants"
+          value={String(setsToWin)}
+          onChangeText={(text) => setSetsToWin(Number(text))}
+          keyboardType="numeric"
+          style={styles.input}
+        />
+        <Text style={styles.inputTitle}>Nombre de jeux gagnants</Text>
+        <TextInput
+          placeholder="Jeux pour gagner un set"
+          value={String(gamesToWinSet)}
+          onChangeText={(text) => setGamesToWinSet(Number(text))}
+          keyboardType="numeric"
+          style={styles.input}
+        />
+        <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 10 }}>
+          <Text style={[styles.inputTitle, { flex: 1 }]}>Activer le tie-break</Text>
+          <TouchableOpacity
+            onPress={() => setTieBreakEnabled(!tieBreakEnabled)}
+            style={{
+              width: 20,
+              height: 20,
+              borderWidth: 1,
+              borderColor: "#fff",
+              backgroundColor: tieBreakEnabled ? "green" : "#fff",
+            }}
+          />
+        </View>
+      </SettingsModal>
+
+      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
         <MaterialIcons name="sports-tennis" size={44} color="white" />
         <Text style={{ fontSize: 44, color: "white" }}>☰</Text>
       </TouchableOpacity>
@@ -282,10 +250,7 @@ export default function TennisScore() {
       <View style={styles.scoresWrapper}>
         <View style={styles.teamBox}>
           <Text style={styles.teamName}>{teamA}</Text>
-          <TouchableOpacity
-            onPress={() => handlePoint("A")}
-            style={styles.scoreContainer}
-          >
+          <TouchableOpacity onPress={() => handlePoint("A")} style={styles.scoreContainer}>
             <Text style={styles.score}>{scoreA}</Text>
           </TouchableOpacity>
           <Text style={styles.sets}>Jeux : {gamesA}</Text>
@@ -293,10 +258,7 @@ export default function TennisScore() {
 
         <View style={styles.teamBox}>
           <Text style={styles.teamName}>{teamB}</Text>
-          <TouchableOpacity
-            onPress={() => handlePoint("B")}
-            style={styles.scoreContainer}
-          >
+          <TouchableOpacity onPress={() => handlePoint("B")} style={styles.scoreContainer}>
             <Text style={styles.score}>{scoreB}</Text>
           </TouchableOpacity>
           <Text style={styles.sets}>Jeux : {gamesB}</Text>
@@ -363,24 +325,6 @@ const styles = StyleSheet.create({
     left: "48%",
     zIndex: 10,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBox: {
-    backgroundColor: "#222",
-    padding: 20,
-    borderRadius: 12,
-    width: "80%",
-  },
-  modalTitle: {
-    fontSize: 22,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "center",
-  },
   inputTitle: {
     fontSize: 18,
     color: "#fff",
@@ -394,11 +338,6 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 6,
     marginBottom: 10,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
   },
   historyBox: {
     paddingBottom: 10,

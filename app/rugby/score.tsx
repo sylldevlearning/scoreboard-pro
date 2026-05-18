@@ -4,18 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   TextInput,
-  Pressable,
   useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
+import SettingsModal from "@/components/SettingsModal";
 
 type RugbySave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -29,7 +26,6 @@ export default function RugbyScore() {
   const [isTraining, setIsTraining] = useState(true);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<RugbySave>("rugby");
@@ -80,48 +76,22 @@ export default function RugbyScore() {
         onDiscard={persist.clear}
       />
 
-      {/* Modal */}
-      <Modal visible={showModal} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowModal(false)}>
-          <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Paramètres</Text>
-            <TextInput
-              placeholder="Nom équipe A"
-              value={teamA}
-              onChangeText={setTeamA}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Nom équipe B"
-              value={teamB}
-              onChangeText={setTeamB}
-              style={styles.input}
-            />
-            <Text style={styles.inputTitle}>Durée</Text>
-            <TextInput
-              placeholder="Durée d'une mi-temps (min)"
-              value={halfDuration.toString()}
-              onChangeText={(t) => setHalfDuration(Number(t))}
-              style={styles.input}
-              keyboardType="numeric"
-            />
-            <TouchableOpacity style={styles.switchBtn} onPress={() => setIsTraining((v) => !v)}>
-              <Text style={styles.switchText}>Mode match : {isTraining ? "✅" : "❌"}</Text>
-            </TouchableOpacity>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => router.push("/")}>
-                <Text style={styles.btn}>🏠</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={resetScores}>
-                <Text style={styles.btn}>🔁</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Text style={styles.btn}>✅</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* MODAL */}
+      <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetScores}>
+        <TextInput placeholder="Nom équipe A" value={teamA} onChangeText={setTeamA} style={styles.input} />
+        <TextInput placeholder="Nom équipe B" value={teamB} onChangeText={setTeamB} style={styles.input} />
+        <Text style={styles.inputTitle}>Durée mi-temps (min)</Text>
+        <TextInput
+          placeholder="Durée d'une mi-temps (min)"
+          value={halfDuration.toString()}
+          onChangeText={(t) => setHalfDuration(Number(t))}
+          style={styles.input}
+          keyboardType="numeric"
+        />
+        <TouchableOpacity style={styles.switchBtn} onPress={() => setIsTraining((v) => !v)}>
+          <Text style={styles.switchText}>Mode match : {isTraining ? "✅" : "❌"}</Text>
+        </TouchableOpacity>
+      </SettingsModal>
 
       {/* Burger */}
       <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
@@ -198,17 +168,8 @@ const styles = StyleSheet.create({
   burger: { position: "absolute", top: 30, left: "48%", zIndex: 10 },
   timerTopLeft: { position: "absolute", top: 30, left: 20, color: "#fff", fontSize: 20, fontWeight: "bold" },
   timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBox: { backgroundColor: "#222", padding: 20, borderRadius: 12, width: "80%" },
-  modalTitle: { fontSize: 22, color: "#fff", marginBottom: 12, textAlign: "center" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
   input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
-  modalButtons: { flexDirection: "row", justifyContent: "space-around", marginTop: 10 },
   btn: { fontSize: 20, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
   switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
   switchText: { color: "#fff", textAlign: "center" },

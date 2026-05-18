@@ -7,12 +7,11 @@ import {
   Modal,
   TextInput,
   Pressable,
-  useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
+import SettingsModal from "@/components/SettingsModal";
 
 type CricketSave = {
   teamA: string; teamB: string;
@@ -20,11 +19,8 @@ type CricketSave = {
   runsB: number; wicketsB: number; oversB: number;
   currentInning: 1 | 2; battingTeam: "A" | "B";
 };
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function CricketScore() {
-  const router = useRouter();
-
   const [teamA, setTeamA] = useState("Équipe A");
   const [teamB, setTeamB] = useState("Équipe B");
 
@@ -42,8 +38,6 @@ export default function CricketScore() {
   const [showModal, setShowModal] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
   const persist = usePersistedScore<CricketSave>("cricket");
 
   useEffect(() => {
@@ -91,7 +85,7 @@ export default function CricketScore() {
     }
   };
 
-  const resetMatch = () => {
+  const resetMatch = useCallback(() => {
     setRunsA(0);
     setWicketsA(0);
     setOversA(0);
@@ -101,7 +95,7 @@ export default function CricketScore() {
     setCurrentInning(1);
     setBattingTeam("A");
     setWinner(null);
-  };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -110,60 +104,33 @@ export default function CricketScore() {
         onResume={handleResume}
         onDiscard={persist.clear}
       />
+
       {/* Burger */}
-      <TouchableOpacity
-        style={styles.burger}
-        onPress={() => setShowModal(true)}
-      >
+      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
         <MaterialCommunityIcons name="cricket" size={40} color="white" />
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
-      {/* Modal Config */}
-      <Modal visible={showModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.modalTitle}>Paramètres</Text>
-            <TextInput
-              placeholder="Nom équipe A"
-              value={teamA}
-              onChangeText={setTeamA}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Nom équipe B"
-              value={teamB}
-              onChangeText={setTeamB}
-              style={styles.input}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => router.push("/")}>
-                <Text style={styles.btn}>🏠</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={resetMatch}>
-                <Text style={styles.btn}>🔁</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Text style={styles.btn}>✅</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* MODAL */}
+      <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
+        <TextInput
+          placeholder="Nom équipe A"
+          value={teamA}
+          onChangeText={setTeamA}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Nom équipe B"
+          value={teamB}
+          onChangeText={setTeamB}
+          style={styles.input}
+        />
+      </SettingsModal>
 
       {/* Winner Modal */}
       <Modal visible={!!winner} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setWinner(null)}>
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
-          >
+          <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>
               {winner === "Match nul" ? "Match nul" : `Gagnant : ${winner}`}
             </Text>
@@ -314,11 +281,5 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 10,
     width: "100%",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "100%",
-    marginTop: 10,
   },
 });
