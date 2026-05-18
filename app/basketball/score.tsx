@@ -11,12 +11,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 
 type BasketballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function BasketScore() {
   const [scoreA, setScoreA] = useState(0);
@@ -29,19 +30,26 @@ export default function BasketScore() {
   const [timeoutsA, setTimeoutsA] = useState(2);
   const [timeoutsB, setTimeoutsB] = useState(2);
   const [isTraining, setIsTraining] = useState(true);
-  const [isQuarterRunning, setIsQuarterRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const timerRef = useRef<number | null>(null);
   const [isTimeout, setIsTimeout] = useState(false);
   const [timeoutTimer, setTimeoutTimer] = useState(30);
-  const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
+  const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<BasketballSave>("basketball");
+
+  const playBuzz = useCallback(async () => {
+    const { sound: s } = await Audio.Sound.createAsync(
+      require("../../assets/buzzer.mp3")
+    );
+    setSound(s);
+    await s.playAsync();
+  }, []);
+
+  const { timeLeft, isRunning: isQuarterRunning, start: startQuarterTimer, reset: resetTimer } =
+    useGameTimer(playBuzz);
 
   useEffect(() => {
     if (!persist.isLoaded) return;
@@ -56,41 +64,11 @@ export default function BasketScore() {
   }, [persist]);
 
   useEffect(() => {
-    return () => {
-      sound?.unloadAsync();
-    };
+    return () => { sound?.unloadAsync(); };
   }, [sound]);
 
-  const playBuzz = async () => {
-    const { sound } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(sound);
-    await sound.playAsync();
-  };
-
-  const startQuarter = () => {
-    if (isQuarterRunning) return;
-    const totalSeconds = quarterDuration * 60;
-    setTimeLeft(totalSeconds);
-    setIsQuarterRunning(true);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsQuarterRunning(false);
-          playBuzz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const startTimeout = (team: "A" | "B") => {
-    if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0))
-      return;
+  const startTimeout = useCallback((team: "A" | "B") => {
+    if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0)) return;
 
     playBuzz();
     setIsTimeout(true);
@@ -110,16 +88,15 @@ export default function BasketScore() {
 
     if (team === "A") setTimeoutsA((t) => t - 1);
     else setTimeoutsB((t) => t - 1);
-  };
+  }, [playBuzz, timeoutsA, timeoutsB]);
 
   const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
-    setIsQuarterRunning(false);
-    setTimeLeft(0);
     setTimeoutsA(timeoutsPerTeam);
     setTimeoutsB(timeoutsPerTeam);
-  }, [timeoutsPerTeam]);
+    resetTimer();
+  }, [timeoutsPerTeam, resetTimer]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
@@ -127,35 +104,20 @@ export default function BasketScore() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
         visible={persist.hasSavedScore}
         onResume={handleResume}
         onDiscard={persist.clear}
       />
+
       {/* Modal */}
       <Modal visible={showModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
-          >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowModal(false)}>
+          <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Paramètres</Text>
-            <TextInput
-              placeholder="Nom équipe A"
-              value={teamA}
-              onChangeText={setTeamA}
-              style={styles.input}
-            />
-            <TextInput
-              placeholder="Nom équipe B"
-              value={teamB}
-              onChangeText={setTeamB}
-              style={styles.input}
-            />
+            <TextInput placeholder="Nom équipe A" value={teamA} onChangeText={setTeamA} style={styles.input} />
+            <TextInput placeholder="Nom équipe B" value={teamB} onChangeText={setTeamB} style={styles.input} />
             <Text style={styles.inputTitle}>Durée quart-temps (min)</Text>
             <TextInput
               placeholder="Durée quart-temps (min)"
@@ -177,24 +139,13 @@ export default function BasketScore() {
               style={styles.input}
               keyboardType="numeric"
             />
-            <TouchableOpacity
-              style={styles.switchBtn}
-              onPress={() => setIsTraining((v) => !v)}
-            >
-              <Text style={styles.switchText}>
-                Mode match : {isTraining ? "✅" : "❌"}
-              </Text>
+            <TouchableOpacity style={styles.switchBtn} onPress={() => setIsTraining((v) => !v)}>
+              <Text style={styles.switchText}>Mode match : {isTraining ? "✅" : "❌"}</Text>
             </TouchableOpacity>
             <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => router.push("/")}>
-                <Text style={styles.btn}>🏠</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={resetScores}>
-                <Text style={styles.btn}>🔁</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Text style={styles.btn}>✅</Text>
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/")}><Text style={styles.btn}>🏠</Text></TouchableOpacity>
+              <TouchableOpacity onPress={resetScores}><Text style={styles.btn}>🔁</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowModal(false)}><Text style={styles.btn}>✅</Text></TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
@@ -205,32 +156,28 @@ export default function BasketScore() {
         style={[styles.burger, { paddingTop: isPortrait ? 60 : 10 }]}
         onPress={() => setShowModal(true)}
       >
-        <MaterialCommunityIcons
-          name="basketball-hoop-outline"
-          size={40}
-          color="white"
-        />
+        <MaterialCommunityIcons name="basketball-hoop-outline" size={40} color="white" />
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
       {/* Chrono */}
       {isQuarterRunning && (
         <Text style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}>
-          ⏱️ {Math.floor(timeLeft / 60)}:
-          {(timeLeft % 60).toString().padStart(2, "0")}
+          ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
         </Text>
       )}
       {isTraining && !isQuarterRunning && (
-        <TouchableOpacity onPress={startQuarter} style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}>
+        <TouchableOpacity
+          onPress={() => startQuarterTimer(quarterDuration)}
+          style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}
+        >
           <Text style={styles.timerStart}>▶️</Text>
         </TouchableOpacity>
       )}
 
       {/* Temps mort actif */}
       {isTimeout && (
-        <Text
-          style={[styles.timeoutText, isPortrait && { bottom: 200 }]}
-        >
+        <Text style={[styles.timeoutText, isPortrait && { bottom: 200 }]}>
           ⏳ Temps mort : {timeoutTimer}s
         </Text>
       )}
@@ -245,15 +192,9 @@ export default function BasketScore() {
           <Text style={styles.score}>{scoreA}</Text>
         </TouchableOpacity>
         <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("A", 2)}>
-            <Text style={styles.btn}>+2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 3)}>
-            <Text style={styles.btn}>+3</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => startTimeout("A")}>
-            <Text style={styles.btn}>T ({timeoutsA})</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => startTimeout("A")}><Text style={styles.btn}>T ({timeoutsA})</Text></TouchableOpacity>
         </View>
       </View>
 
@@ -267,15 +208,9 @@ export default function BasketScore() {
           <Text style={styles.score}>{scoreB}</Text>
         </TouchableOpacity>
         <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("B", 2)}>
-            <Text style={styles.btn}>+2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 3)}>
-            <Text style={styles.btn}>+3</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => startTimeout("B")}>
-            <Text style={styles.btn}>T ({timeoutsB})</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>
         </View>
       </View>
     </View>
@@ -283,115 +218,22 @@ export default function BasketScore() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    padding: 10,
-  },
-  teamBox: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flex: 1,
-    gap: 10,
-  },
-  teamName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-  },
-  score: {
-    color: "#fff",
-    fontSize: 120,
-    fontWeight: "bold",
-  },
-  row: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-  burger: {
-    position: "absolute",
-    top: 30,
-    left: "48%",
-    zIndex: 10,
-  },
-  timerTopLeft: {
-    position: "absolute",
-    top: 30,
-    left: 20,
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  timerStart: {
-    color: "#0f0",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  timeoutText: {
-    position: "absolute",
-    bottom: 20,
-    width: "100%",
-    textAlign: "center",
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBox: {
-    backgroundColor: "#222",
-    padding: 20,
-    borderRadius: 12,
-    width: "80%",
-  },
-  modalTitle: {
-    fontSize: 22,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  inputTitle: {
-    fontSize: 12,
-    color: "#fff",
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  input: {
-    backgroundColor: "#333",
-    color: "#fff",
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
-  },
-  btn: {
-    fontSize: 18,
-    color: "#fff",
-    backgroundColor: "#444",
-    padding: 10,
-    borderRadius: 8,
-  },
-  switchBtn: {
-    padding: 10,
-    backgroundColor: "#555",
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  switchText: {
-    color: "#fff",
-    textAlign: "center",
-  },
+  container: { flex: 1, backgroundColor: "#000", flexDirection: "row", justifyContent: "space-around", alignItems: "center", padding: 10 },
+  teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 },
+  teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
+  score: { color: "#fff", fontSize: 120, fontWeight: "bold" },
+  row: { flexDirection: "row", gap: 10, marginTop: 10 },
+  burger: { position: "absolute", top: 30, left: "48%", zIndex: 10 },
+  timerTopLeft: { position: "absolute", top: 30, left: 20, color: "#fff", fontSize: 20, fontWeight: "bold" },
+  timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
+  timeoutText: { position: "absolute", bottom: 20, width: "100%", textAlign: "center", color: "#fff", fontSize: 24, fontWeight: "bold" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
+  modalBox: { backgroundColor: "#222", padding: 20, borderRadius: 12, width: "80%" },
+  modalTitle: { fontSize: 22, color: "#fff", marginBottom: 12, textAlign: "center" },
+  inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
+  input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
+  modalButtons: { flexDirection: "row", justifyContent: "space-around", marginTop: 10 },
+  btn: { fontSize: 18, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
+  switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
+  switchText: { color: "#fff", textAlign: "center" },
 });

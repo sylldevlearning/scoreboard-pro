@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,12 +11,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 
 type RugbySave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function RugbyScore() {
   const [scoreA, setScoreA] = useState(0);
@@ -26,14 +27,23 @@ export default function RugbyScore() {
   const [showModal, setShowModal] = useState(false);
   const [halfDuration, setHalfDuration] = useState(40);
   const [isTraining, setIsTraining] = useState(true);
-  const [isHalfRunning, setIsHalfRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const timerRef = useRef<number | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<RugbySave>("rugby");
+
+  const playBuzz = useCallback(async () => {
+    const { sound: s } = await Audio.Sound.createAsync(
+      require("../../assets/buzzer.mp3")
+    );
+    setSound(s);
+    await s.playAsync();
+  }, []);
+
+  const { timeLeft, isRunning: isHalfRunning, start: startHalfTimer, reset: resetTimer } =
+    useGameTimer(playBuzz);
 
   useEffect(() => {
     if (!persist.isLoaded) return;
@@ -48,44 +58,14 @@ export default function RugbyScore() {
   }, [persist]);
 
   useEffect(() => {
-    return () => {
-      sound?.unloadAsync();
-    };
+    return () => { sound?.unloadAsync(); };
   }, [sound]);
-
-  const playBuzz = async () => {
-    const { sound } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(sound);
-    await sound.playAsync();
-  };
-
-  const startHalf = () => {
-    if (isHalfRunning) return;
-    const totalSeconds = halfDuration * 60;
-    setTimeLeft(totalSeconds);
-    setIsHalfRunning(true);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsHalfRunning(false);
-          playBuzz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
 
   const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
-    setIsHalfRunning(false);
-    setTimeLeft(0);
-  }, []);
+    resetTimer();
+  }, [resetTimer]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
@@ -99,16 +79,11 @@ export default function RugbyScore() {
         onResume={handleResume}
         onDiscard={persist.clear}
       />
+
       {/* Modal */}
       <Modal visible={showModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-        >
-          <Pressable
-            style={styles.modalBox}
-            onPress={(e) => e.stopPropagation()}
-          >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowModal(false)}>
+          <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Paramètres</Text>
             <TextInput
               placeholder="Nom équipe A"
@@ -123,7 +98,6 @@ export default function RugbyScore() {
               style={styles.input}
             />
             <Text style={styles.inputTitle}>Durée</Text>
-
             <TextInput
               placeholder="Durée d'une mi-temps (min)"
               value={halfDuration.toString()}
@@ -131,13 +105,8 @@ export default function RugbyScore() {
               style={styles.input}
               keyboardType="numeric"
             />
-            <TouchableOpacity
-              style={styles.switchBtn}
-              onPress={() => setIsTraining((v) => !v)}
-            >
-              <Text style={styles.switchText}>
-                Mode match : {isTraining ? "✅" : "❌"}
-              </Text>
+            <TouchableOpacity style={styles.switchBtn} onPress={() => setIsTraining((v) => !v)}>
+              <Text style={styles.switchText}>Mode match : {isTraining ? "✅" : "❌"}</Text>
             </TouchableOpacity>
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => router.push("/")}>
@@ -155,26 +124,20 @@ export default function RugbyScore() {
       </Modal>
 
       {/* Burger */}
-      <TouchableOpacity
-        style={styles.burger}
-        onPress={() => setShowModal(true)}
-      >
+      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
         <MaterialCommunityIcons name="rugby" size={40} color="white" />
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
-      {/* Chrono en haut à gauche */}
+      {/* Chrono */}
       {isHalfRunning && (
         <Text style={styles.timerTopLeft}>
-          ⏱️ {Math.floor(timeLeft / 60)}:
-          {(timeLeft % 60).toString().padStart(2, "0")}
+          ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
         </Text>
       )}
-
-      {/* Lancer la mi-temps */}
       {isTraining && !isHalfRunning && (
-        <TouchableOpacity onPress={startHalf} style={styles.timerTopLeft}>
-          <Text style={styles.timerStart}>▶️ </Text>
+        <TouchableOpacity onPress={() => startHalfTimer(halfDuration)} style={styles.timerTopLeft}>
+          <Text style={styles.timerStart}>▶️</Text>
         </TouchableOpacity>
       )}
 
@@ -228,101 +191,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 10,
   },
-  teamBox: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flex: 1,
-    gap: 10,
-  },
-  teamName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-  },
-  score: {
-    color: "#fff",
-    fontSize: 120,
-    fontWeight: "bold",
-  },
-  row: {
-    flexDirection: "row",
-    gap: 20,
-    marginTop: 10,
-  },
-  burger: {
-    position: "absolute",
-    top: 30,
-    left: "48%",
-    zIndex: 10,
-  },
-  timerTopLeft: {
-    position: "absolute",
-    top: 30,
-    left: 20,
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  timerStart: {
-    position: "absolute",
-    top: 30,
-    alignSelf: "center",
-    color: "#0f0",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
+  teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 },
+  teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
+  score: { color: "#fff", fontSize: 120, fontWeight: "bold" },
+  row: { flexDirection: "row", gap: 20, marginTop: 10 },
+  burger: { position: "absolute", top: 30, left: "48%", zIndex: 10 },
+  timerTopLeft: { position: "absolute", top: 30, left: 20, color: "#fff", fontSize: 20, fontWeight: "bold" },
+  timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalBox: {
-    backgroundColor: "#222",
-    padding: 20,
-    borderRadius: 12,
-    width: "80%",
-  },
-  modalTitle: {
-    fontSize: 22,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  inputTitle: {
-    fontSize: 12,
-    color: "#fff",
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  input: {
-    backgroundColor: "#333",
-    color: "#fff",
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
-  },
-  btn: {
-    fontSize: 20,
-    color: "#fff",
-    backgroundColor: "#444",
-    padding: 10,
-    borderRadius: 8,
-  },
-  switchBtn: {
-    padding: 10,
-    backgroundColor: "#555",
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  switchText: {
-    color: "#fff",
-    textAlign: "center",
-  },
+  modalBox: { backgroundColor: "#222", padding: 20, borderRadius: 12, width: "80%" },
+  modalTitle: { fontSize: 22, color: "#fff", marginBottom: 12, textAlign: "center" },
+  inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
+  input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
+  modalButtons: { flexDirection: "row", justifyContent: "space-around", marginTop: 10 },
+  btn: { fontSize: 20, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
+  switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
+  switchText: { color: "#fff", textAlign: "center" },
 });
