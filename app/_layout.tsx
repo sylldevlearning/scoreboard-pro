@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { Slot, usePathname } from "expo-router";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -10,19 +10,16 @@ import {
   TestIds,
 } from "react-native-google-mobile-ads";
 
-// --- AdMob: vrai unitId en prod, TestIds en dev (depuis ton ancienne app)
-const REAL_BANNER_UNIT_ID = "ca-app-pub-8391520865775051/5872519298";
+const REAL_BANNER_UNIT_ID = process.env.EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID ?? "";
 const bannerUnitId = __DEV__ ? TestIds.BANNER : REAL_BANNER_UNIT_ID;
 
 export default function RootLayout() {
   const pathname = usePathname();
-  const [orientation, setOrientation] =
-    useState<ScreenOrientation.OrientationLock | null>(null);
 
   useEffect(() => {
     NavigationBar.setVisibilityAsync("hidden");
 
-    const applyInitialOrientation = async () => {
+    const applyOrientation = async () => {
       if (pathname === "/") {
         await ScreenOrientation.lockAsync(
           ScreenOrientation.OrientationLock.PORTRAIT
@@ -32,48 +29,40 @@ export default function RootLayout() {
           ScreenOrientation.OrientationLock.LANDSCAPE
         );
       }
-      const current = await ScreenOrientation.getOrientationLockAsync();
-      setOrientation(current);
     };
 
-    applyInitialOrientation();
+    applyOrientation();
   }, [pathname]);
 
-  const toggleOrientation = async () => {
+  const toggleOrientation = useCallback(async () => {
     const current = await ScreenOrientation.getOrientationLockAsync();
     const isLandscape =
       current === ScreenOrientation.OrientationLock.LANDSCAPE ||
       current === ScreenOrientation.OrientationLock.LANDSCAPE_LEFT ||
       current === ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT;
 
-    const newOrientation = isLandscape
-      ? ScreenOrientation.OrientationLock.PORTRAIT
-      : ScreenOrientation.OrientationLock.LANDSCAPE;
-
-    await ScreenOrientation.lockAsync(newOrientation);
-    setOrientation(newOrientation);
-  };
+    await ScreenOrientation.lockAsync(
+      isLandscape
+        ? ScreenOrientation.OrientationLock.PORTRAIT
+        : ScreenOrientation.OrientationLock.LANDSCAPE
+    );
+  }, []);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Slot />
+    <View style={styles.root}>
+      <View style={styles.content}>
+        <Slot />
+      </View>
 
-      {/* --- Bandeau publicitaire en bas --- */}
       <View style={styles.bannerContainer}>
         <BannerAd
           unitId={bannerUnitId}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-          onAdLoaded={() => console.log("Ad loaded")}
-          onAdFailedToLoad={(err) => console.log("Ad failed", err)}
         />
       </View>
 
-      {/* --- Bouton rotation --- */}
       <View pointerEvents="box-none" style={styles.overlay}>
-        <TouchableOpacity
-          style={styles.rotationBtn}
-          onPress={toggleOrientation}
-        >
+        <TouchableOpacity style={styles.rotationBtn} onPress={toggleOrientation}>
           <MaterialCommunityIcons
             name="phone-rotate-portrait"
             size={24}
@@ -86,10 +75,13 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
   bannerContainer: {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
     alignItems: "center",
     backgroundColor: "#fff",
     paddingBottom: Platform.OS === "ios" ? 20 : 0,
@@ -99,6 +91,8 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "flex-end",
     padding: Platform.OS === "android" ? 20 : 30,
+    // Le paddingBottom laisse la place au banner
+    paddingBottom: Platform.OS === "android" ? 80 : 90,
   },
   rotationBtn: {
     borderRadius: 24,
