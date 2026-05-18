@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   Modal,
   TextInput,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
@@ -27,6 +27,8 @@ export default function RugbyScore() {
   const timerRef = useRef<number | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   useEffect(() => {
     return () => {
@@ -61,20 +63,20 @@ export default function RugbyScore() {
     }, 1000);
   };
 
-  const resetScores = () => {
+  const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
     setIsHalfRunning(false);
     setTimeLeft(0);
-  };
+  }, []);
 
-  const handleScore = (team: "A" | "B", delta: number) => {
+  const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
     else setScoreB((s) => Math.max(0, s + delta));
-  };
+  }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       {/* Modal */}
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable
@@ -203,10 +205,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     padding: 10,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
   },
   teamBox: {
     alignItems: "center",
@@ -233,11 +231,6 @@ const styles = StyleSheet.create({
   burger: {
     position: "absolute",
     top: 30,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
-
     left: "48%",
     zIndex: 10,
   },

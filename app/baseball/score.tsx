@@ -9,7 +9,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -21,8 +21,8 @@ export default function BaseballScore() {
   const [scoresB, setScoresB] = useState<number[]>(Array(9).fill(0));
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
-  const isPortrait =
-    Dimensions.get("window").height > Dimensions.get("window").width;
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   useEffect(() => {
     setScoresA(Array(innings).fill(0));
@@ -47,7 +47,7 @@ export default function BaseballScore() {
   const total = (scores: number[]) => scores.reduce((a, b) => a + b, 0);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setShowModal(false)}>
           <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>
@@ -141,10 +141,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
   },
   burger: {
     position: "absolute",

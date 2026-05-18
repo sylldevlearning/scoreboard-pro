@@ -7,7 +7,7 @@ import {
   ScrollView,
   SafeAreaView,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 
 const sports = [
@@ -62,7 +62,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             key={sport.key}
             style={styles.card}
-            onPress={() => router.push(`/${sport.key}/score` as any)}
+            onPress={() => router.push(`/${sport.key}/score` as Href)}
           >
             <Image source={sport.image} style={styles.image} />
             <LinearGradient

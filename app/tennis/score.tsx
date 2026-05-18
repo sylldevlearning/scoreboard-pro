@@ -8,14 +8,16 @@ import {
   TextInput,
   Pressable,
   Button,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
+type TennisScore = 0 | 15 | 30 | 40 | "A" | "=";
+
 export default function TennisScore() {
-  const [scoreA, setScoreA] = useState<number | string>(0);
-  const [scoreB, setScoreB] = useState<number | string>(0);
+  const [scoreA, setScoreA] = useState<TennisScore>(0);
+  const [scoreB, setScoreB] = useState<TennisScore>(0);
   const [teamA, setTeamA] = useState("Joueur A");
   const [teamB, setTeamB] = useState("Joueur B");
   const [showModal, setShowModal] = useState(false);
@@ -30,9 +32,9 @@ export default function TennisScore() {
   const [isTieBreak, setIsTieBreak] = useState(false);
 
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
   const scoreOrder = [0, 15, 30, 40];
-  const isPortrait =
-    Dimensions.get("window").height > Dimensions.get("window").width;
 
   const resetMatch = () => {
     setScoreA(0);
@@ -45,7 +47,7 @@ export default function TennisScore() {
     setIsTieBreak(false);
   };
 
-  const nextScore = (current: number | string): number | string => {
+  const nextScore = (current: TennisScore): TennisScore => {
     const index = scoreOrder.indexOf(current as number);
     return index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40;
   };
@@ -167,7 +169,7 @@ export default function TennisScore() {
     text + " ".repeat(Math.max(0, length - text.length));
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable
           style={styles.modalOverlay}
@@ -287,10 +289,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
     padding: 10,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
     justifyContent: "space-between",
   },
   scoresWrapper: {
@@ -329,11 +327,6 @@ const styles = StyleSheet.create({
   burger: {
     position: "absolute",
     top: 30,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
-
     left: "48%",
     zIndex: 10,
   },

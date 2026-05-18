@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   Modal,
   TextInput,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
@@ -35,6 +35,8 @@ export default function BasketScore() {
   );
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   useEffect(() => {
     return () => {
@@ -93,19 +95,19 @@ export default function BasketScore() {
     else setTimeoutsB((t) => t - 1);
   };
 
-  const resetScores = () => {
+  const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
     setIsQuarterRunning(false);
     setTimeLeft(0);
     setTimeoutsA(timeoutsPerTeam);
     setTimeoutsB(timeoutsPerTeam);
-  };
+  }, [timeoutsPerTeam]);
 
-  const handleScore = (team: "A" | "B", delta: number) => {
+  const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
     else setScoreB((s) => Math.max(0, s + delta));
-  };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -178,7 +180,7 @@ export default function BasketScore() {
 
       {/* Burger */}
       <TouchableOpacity
-        style={styles.burger}
+        style={[styles.burger, { paddingTop: isPortrait ? 60 : 10 }]}
         onPress={() => setShowModal(true)}
       >
         <MaterialCommunityIcons
@@ -191,13 +193,13 @@ export default function BasketScore() {
 
       {/* Chrono */}
       {isQuarterRunning && (
-        <Text style={styles.timerTopLeft}>
+        <Text style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}>
           ⏱️ {Math.floor(timeLeft / 60)}:
           {(timeLeft % 60).toString().padStart(2, "0")}
         </Text>
       )}
       {isTraining && !isQuarterRunning && (
-        <TouchableOpacity onPress={startQuarter} style={styles.timerTopLeft}>
+        <TouchableOpacity onPress={startQuarter} style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}>
           <Text style={styles.timerStart}>▶️</Text>
         </TouchableOpacity>
       )}
@@ -205,11 +207,7 @@ export default function BasketScore() {
       {/* Temps mort actif */}
       {isTimeout && (
         <Text
-          style={[
-            styles.timeoutText,
-            Dimensions.get("window").height >
-              Dimensions.get("window").width && { bottom: 200 },
-          ]}
+          style={[styles.timeoutText, isPortrait && { bottom: 200 }]}
         >
           ⏳ Temps mort : {timeoutTimer}s
         </Text>
@@ -270,10 +268,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     padding: 10,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
   },
   teamBox: {
     alignItems: "center",
@@ -300,22 +294,12 @@ const styles = StyleSheet.create({
   burger: {
     position: "absolute",
     top: 30,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
-
     left: "48%",
     zIndex: 10,
   },
   timerTopLeft: {
     position: "absolute",
     top: 30,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 20
-        : 10,
-
     left: 20,
     color: "#fff",
     fontSize: 20,

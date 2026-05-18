@@ -1,5 +1,5 @@
 // VolleyballScore.tsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   TextInput,
   Pressable,
   Button,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
@@ -39,6 +39,8 @@ export default function VolleyballScore() {
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   useEffect(() => {
     return () => {
@@ -54,7 +56,7 @@ export default function VolleyballScore() {
     await sound.playAsync();
   };
 
-  const startTimeout = (team: "A" | "B") => {
+  const startTimeout = useCallback((team: "A" | "B") => {
     if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0))
       return;
 
@@ -76,9 +78,9 @@ export default function VolleyballScore() {
 
     if (team === "A") setTimeoutsA((t) => t - 1);
     else setTimeoutsB((t) => t - 1);
-  };
+  }, [playBuzz, timeoutsA, timeoutsB]);
 
-  const resetScores = () => {
+  const resetScores = useCallback(() => {
     setScoreA(startScore);
     setScoreB(startScore);
     setTimeoutsA(2);
@@ -89,7 +91,7 @@ export default function VolleyballScore() {
     setSetsB(0);
     setSetsHistory([]);
     setHasSwitchedAt8(false);
-  };
+  }, [startScore]);
 
   const handleScoreChange = (team: "A" | "B", delta: number) => {
     const newScoreA = team === "A" ? scoreA + delta : scoreA;
@@ -140,7 +142,7 @@ export default function VolleyballScore() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       {/* Modal paramètres */}
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable
@@ -302,10 +304,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     padding: 10,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
   },
   teamBox: {
     alignItems: "center",

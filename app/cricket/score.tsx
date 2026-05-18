@@ -7,7 +7,7 @@ import {
   Modal,
   TextInput,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -33,8 +33,8 @@ export default function CricketScore() {
   const [showModal, setShowModal] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
 
-  const isPortrait =
-    Dimensions.get("window").height > Dimensions.get("window").width;
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   const handleRun = (team: "A" | "B", run: number) => {
     if (team === "A") setRunsA((r) => r + run);
@@ -223,11 +223,6 @@ const styles = StyleSheet.create({
   burger: {
     position: "absolute",
     top: 30,
-    paddingTop:
-      Dimensions.get("window").height > Dimensions.get("window").width
-        ? 60
-        : 10,
-
     left: "5%",
     zIndex: 10,
   },
