@@ -1,5 +1,5 @@
 // app/baseball/score.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type BaseballSave = { teamA: string; teamB: string; scoresA: number[]; scoresB: number[] };
 export default function BaseballScore() {
   const [innings, setInnings] = useState(6);
   const [teamA, setTeamA] = useState("Équipe A");
@@ -23,6 +27,20 @@ export default function BaseballScore() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const persist = usePersistedScore<BaseballSave>("baseball");
+
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ teamA, teamB, scoresA, scoresB });
+  }, [teamA, teamB, scoresA, scoresB, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setTeamA(data.teamA); setTeamB(data.teamB);
+    setScoresA(data.scoresA); setScoresB(data.scoresB);
+    setInnings(data.scoresA.length);
+  }, [persist]);
 
   useEffect(() => {
     setScoresA(Array(innings).fill(0));
@@ -48,6 +66,11 @@ export default function BaseballScore() {
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setShowModal(false)}>
           <Pressable style={styles.modal} onPress={(e) => e.stopPropagation()}>

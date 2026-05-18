@@ -15,6 +15,17 @@ import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type VolleyballSave = {
+  scoreA: number; scoreB: number;
+  setsA: number; setsB: number;
+  timeoutsA: number; timeoutsB: number;
+  teamA: string; teamB: string;
+  setsHistory: string[];
+};
+
 export default function VolleyballScore() {
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
@@ -36,11 +47,29 @@ export default function VolleyballScore() {
   const [nbSetsToWin, setNbSetsToWin] = useState(3);
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
 
+  const persist = usePersistedScore<VolleyballSave>("volleyball");
+
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+
+  // Auto-save scores to AsyncStorage
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory });
+  }, [scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setScoreA(data.scoreA); setScoreB(data.scoreB);
+    setSetsA(data.setsA); setSetsB(data.setsB);
+    setTimeoutsA(data.timeoutsA); setTimeoutsB(data.timeoutsB);
+    setTeamA(data.teamA); setTeamB(data.teamB);
+    setSetsHistory(data.setsHistory);
+  }, [persist]);
 
   useEffect(() => {
     return () => {
@@ -143,6 +172,12 @@ export default function VolleyballScore() {
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
+
       {/* Modal paramètres */}
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable

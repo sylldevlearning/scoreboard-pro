@@ -11,6 +11,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type BasketballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
@@ -37,6 +41,19 @@ export default function BasketScore() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const persist = usePersistedScore<BasketballSave>("basketball");
+
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setScoreA(data.scoreA); setScoreB(data.scoreB);
+    setTeamA(data.teamA); setTeamB(data.teamB);
+  }, [persist]);
 
   useEffect(() => {
     return () => {
@@ -111,6 +128,11 @@ export default function BasketScore() {
 
   return (
     <View style={styles.container}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
       {/* Modal */}
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable

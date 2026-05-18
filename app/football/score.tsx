@@ -11,6 +11,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type FootballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
@@ -29,6 +33,19 @@ export default function FootballScore() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const persist = usePersistedScore<FootballSave>("football");
+
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setScoreA(data.scoreA); setScoreB(data.scoreB);
+    setTeamA(data.teamA); setTeamB(data.teamB);
+  }, [persist]);
 
   useEffect(() => {
     return () => {
@@ -77,6 +94,11 @@ export default function FootballScore() {
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
       {/* MODAL */}
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable

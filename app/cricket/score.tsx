@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,15 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type CricketSave = {
+  teamA: string; teamB: string;
+  runsA: number; wicketsA: number; oversA: number;
+  runsB: number; wicketsB: number; oversB: number;
+  currentInning: 1 | 2; battingTeam: "A" | "B";
+};
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function CricketScore() {
@@ -35,6 +44,21 @@ export default function CricketScore() {
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const persist = usePersistedScore<CricketSave>("cricket");
+
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam });
+  }, [teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setTeamA(data.teamA); setTeamB(data.teamB);
+    setRunsA(data.runsA); setWicketsA(data.wicketsA); setOversA(data.oversA);
+    setRunsB(data.runsB); setWicketsB(data.wicketsB); setOversB(data.oversB);
+    setCurrentInning(data.currentInning); setBattingTeam(data.battingTeam);
+  }, [persist]);
 
   const handleRun = (team: "A" | "B", run: number) => {
     if (team === "A") setRunsA((r) => r + run);
@@ -81,6 +105,11 @@ export default function CricketScore() {
 
   return (
     <View style={styles.container}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
       {/* Burger */}
       <TouchableOpacity
         style={styles.burger}

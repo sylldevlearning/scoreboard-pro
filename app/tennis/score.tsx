@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,17 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { usePersistedScore } from "@/hooks/usePersistedScore";
+import ResumeModal from "@/components/ResumeModal";
+
+type TennisSave = {
+  scoreA: TennisScore; scoreB: TennisScore;
+  gamesA: number; gamesB: number;
+  setsA: number; setsB: number;
+  setsHistory: number[][];
+  teamA: string; teamB: string;
+  isTieBreak: boolean;
+};
 
 type TennisScore = 0 | 15 | 30 | 40 | "A" | "=";
 
@@ -35,6 +46,23 @@ export default function TennisScore() {
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const scoreOrder = [0, 15, 30, 40];
+  const persist = usePersistedScore<TennisSave>("tennis");
+
+  useEffect(() => {
+    if (!persist.isLoaded) return;
+    persist.save({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak });
+  }, [scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, persist.isLoaded]);
+
+  const handleResume = useCallback(() => {
+    const data = persist.resume();
+    if (!data) return;
+    setScoreA(data.scoreA); setScoreB(data.scoreB);
+    setGamesA(data.gamesA); setGamesB(data.gamesB);
+    setSetsA(data.setsA); setSetsB(data.setsB);
+    setSetsHistory(data.setsHistory);
+    setTeamA(data.teamA); setTeamB(data.teamB);
+    setIsTieBreak(data.isTieBreak);
+  }, [persist]);
 
   const resetMatch = () => {
     setScoreA(0);
@@ -170,6 +198,11 @@ export default function TennisScore() {
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+      <ResumeModal
+        visible={persist.hasSavedScore}
+        onResume={handleResume}
+        onDiscard={persist.clear}
+      />
       <Modal visible={showModal} transparent animationType="fade">
         <Pressable
           style={styles.modalOverlay}
