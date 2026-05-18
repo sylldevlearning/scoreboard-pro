@@ -10,7 +10,6 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as ScreenOrientation from "expo-screen-orientation";
 import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -38,8 +37,10 @@ export default function BasketScore() {
   const router = useRouter();
 
   useEffect(() => {
-    ScreenOrientation.unlockAsync();
-  }, []);
+    return () => {
+      sound?.unloadAsync();
+    };
+  }, [sound]);
 
   const playBuzz = async () => {
     const { sound } = await Audio.Sound.createAsync(

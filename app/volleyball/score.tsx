@@ -40,8 +40,11 @@ export default function VolleyballScore() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
 
-  const isPortrait =
-    Dimensions.get("window").height > Dimensions.get("window").width;
+  useEffect(() => {
+    return () => {
+      sound?.unloadAsync();
+    };
+  }, [sound]);
 
   const playBuzz = async () => {
     const { sound } = await Audio.Sound.createAsync(

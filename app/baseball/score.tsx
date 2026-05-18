@@ -12,8 +12,6 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as ScreenOrientation from "expo-screen-orientation";
-
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 export default function BaseballScore() {
   const [innings, setInnings] = useState(6);
@@ -30,18 +28,6 @@ export default function BaseballScore() {
     setScoresA(Array(innings).fill(0));
     setScoresB(Array(innings).fill(0));
   }, [innings]);
-  useEffect(() => {
-    const lockOrientation = async () => {
-      await ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.LANDSCAPE
-      );
-    };
-    lockOrientation();
-
-    return () => {
-      ScreenOrientation.unlockAsync(); // Déverrouille à la sortie de l'écran
-    };
-  }, []);
 
   const handleScoreChange = (
     team: "A" | "B",

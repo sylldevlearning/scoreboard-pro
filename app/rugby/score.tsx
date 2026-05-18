@@ -10,7 +10,6 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as ScreenOrientation from "expo-screen-orientation";
 import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -29,12 +28,11 @@ export default function RugbyScore() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
 
-  const isPortrait =
-    Dimensions.get("window").height > Dimensions.get("window").width;
-
   useEffect(() => {
-    ScreenOrientation.unlockAsync();
-  }, []);
+    return () => {
+      sound?.unloadAsync();
+    };
+  }, [sound]);
 
   const playBuzz = async () => {
     const { sound } = await Audio.Sound.createAsync(
