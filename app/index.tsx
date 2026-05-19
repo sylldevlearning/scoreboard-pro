@@ -17,6 +17,11 @@ const sports = [
     image: require("../assets/sports/volleyball.jpg"),
   },
   {
+    name: "Hockey",
+    key: "hockey",
+    image: require("../assets/sports/hockey.jpg"),
+  },
+  {
     name: "Tennis",
     key: "tennis",
     image: require("../assets/sports/tennis1.jpg"),
@@ -43,11 +48,6 @@ const sports = [
     name: "Baseball",
     key: "baseball",
     image: require("../assets/sports/baseball.jpg"),
-  },
-  {
-    name: "Hockey",
-    key: "hockey",
-    image: require("../assets/sports/football.jpg"), // TODO: remplacer par hockey.jpg
   },
 ];
 

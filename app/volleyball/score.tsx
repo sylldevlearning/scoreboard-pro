@@ -13,8 +13,18 @@ import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { useCardManager } from "@/hooks/useCardManager";
+import type { CardTypeConfig } from "@/hooks/useCardManager";
+import CardTracker from "@/components/CardTracker";
+import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+
+const VOLLEYBALL_CARDS: CardTypeConfig[] = [
+  { type: "yellow", label: "Avertissement", emoji: "🟨", color: "#f1c40f" },
+  { type: "red", label: "Point adverse (+1)", emoji: "🟥", color: "#e74c3c" },
+  { type: "red_yellow", label: "Expulsion", emoji: "🟥🟨", color: "#e67e22" },
+];
 
 type VolleyballSave = {
   scoreA: number; scoreB: number;
@@ -48,6 +58,7 @@ export default function VolleyballScore() {
   const persist = usePersistedScore<VolleyballSave>("volleyball");
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const { cards, addCard, resetCards } = useCardManager();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
 
@@ -112,7 +123,8 @@ export default function VolleyballScore() {
     setSetsB(0);
     setSetsHistory([]);
     setHasSwitchedAt8(false);
-  }, [startScore]);
+    resetCards();
+  }, [startScore, resetCards]);
 
   const handleScoreChange = (team: "A" | "B", delta: number) => {
     const newScoreA = team === "A" ? scoreA + delta : scoreA;
@@ -158,6 +170,13 @@ export default function VolleyballScore() {
         playBuzz();
         setHasSwitchedAt8(true);
       }
+    }
+  };
+
+  const handleAddCard = (team: "A" | "B", cardType: string) => {
+    addCard(team, cardType);
+    if (cardType === "red") {
+      handleScoreChange(team === "A" ? "B" : "A", 1);
     }
   };
 
@@ -261,6 +280,7 @@ export default function VolleyballScore() {
       ].map(([team, name, score, sets, timeouts]) => (
         <View key={team} style={styles.teamBox}>
           <Text style={styles.teamName}>{name}</Text>
+          <CardTracker team={team as "A" | "B"} cards={cards} cardTypes={VOLLEYBALL_CARDS} />
           <TouchableOpacity onPress={() => handleScoreChange(team as "A" | "B", -1)}>
             <MaterialCommunityIcons name="eraser" size={32} color="white" />
           </TouchableOpacity>
@@ -274,6 +294,12 @@ export default function VolleyballScore() {
             <Text style={styles.undo}>T ({timeouts})</Text>
           </TouchableOpacity>
           <Text style={styles.sets}>Sets : {sets}</Text>
+          <CardActionButtons
+            team={team as "A" | "B"}
+            teamName={name as string}
+            cardTypes={VOLLEYBALL_CARDS}
+            onAddCard={handleAddCard}
+          />
         </View>
       ))}
 

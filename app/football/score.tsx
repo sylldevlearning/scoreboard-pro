@@ -12,8 +12,17 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useGameTimer } from "@/hooks/useGameTimer";
+import { useCardManager } from "@/hooks/useCardManager";
+import type { CardTypeConfig } from "@/hooks/useCardManager";
+import CardTracker from "@/components/CardTracker";
+import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+
+const FOOTBALL_CARDS: CardTypeConfig[] = [
+  { type: "yellow", label: "Carton jaune", emoji: "🟨", color: "#f1c40f" },
+  { type: "red", label: "Carton rouge (expulsion)", emoji: "🟥", color: "#e74c3c" },
+];
 
 type FootballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -42,6 +51,8 @@ export default function FootballScore() {
   const { timeLeft, isRunning: isHalfRunning, start: startHalfTimer, reset: resetTimer } =
     useGameTimer(playBuzz);
 
+  const { cards, addCard, getCardCount, resetCards } = useCardManager();
+
   useEffect(() => {
     if (!persist.isLoaded) return;
     persist.save({ scoreA, scoreB, teamA, teamB });
@@ -62,7 +73,16 @@ export default function FootballScore() {
     setScoreA(0);
     setScoreB(0);
     resetTimer();
-  }, [resetTimer]);
+    resetCards();
+  }, [resetTimer, resetCards]);
+
+  const handleAddCard = useCallback((team: "A" | "B", cardType: string) => {
+    const yellowsBefore = getCardCount(team, "yellow");
+    addCard(team, cardType);
+    if (cardType === "yellow" && yellowsBefore >= 1) {
+      addCard(team, "red");
+    }
+  }, [addCard, getCardCount]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
@@ -117,22 +137,36 @@ export default function FootballScore() {
       {/* SCORES */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
+        <CardTracker team="A" cards={cards} cardTypes={FOOTBALL_CARDS} />
         <TouchableOpacity onPress={() => handleScore("A", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("A", 1)}>
           <Text style={styles.score}>{scoreA}</Text>
         </TouchableOpacity>
+        <CardActionButtons
+          team="A"
+          teamName={teamA}
+          cardTypes={FOOTBALL_CARDS}
+          onAddCard={handleAddCard}
+        />
       </View>
 
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
+        <CardTracker team="B" cards={cards} cardTypes={FOOTBALL_CARDS} />
         <TouchableOpacity onPress={() => handleScore("B", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("B", 1)}>
           <Text style={styles.score}>{scoreB}</Text>
         </TouchableOpacity>
+        <CardActionButtons
+          team="B"
+          teamName={teamB}
+          cardTypes={FOOTBALL_CARDS}
+          onAddCard={handleAddCard}
+        />
       </View>
     </View>
   );

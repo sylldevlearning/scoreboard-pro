@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import { Audio } from "expo-av";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useGameTimer } from "@/hooks/useGameTimer";
+import { useCardManager } from "@/hooks/useCardManager";
+import CardTracker from "@/components/CardTracker";
+import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
 
@@ -26,6 +29,7 @@ export default function HockeyScore() {
   const [showModal, setShowModal] = useState(false);
   const [periodDuration, setPeriodDuration] = useState(20);
   const [currentPeriod, setCurrentPeriod] = useState<Period>(1);
+  const [yellowPenaltyMinutes, setYellowPenaltyMinutes] = useState(5);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const { width, height } = useWindowDimensions();
@@ -49,6 +53,14 @@ export default function HockeyScore() {
     reset: resetTimer,
   } = useGameTimer(playBuzz);
 
+  const hockeyCards = useMemo(() => [
+    { type: "green", label: "Verte (2 min)", emoji: "🟩", color: "#27ae60", penaltySeconds: 120 },
+    { type: "yellow", label: `Jaune (${yellowPenaltyMinutes} min)`, emoji: "🟨", color: "#f1c40f", penaltySeconds: yellowPenaltyMinutes * 60 },
+    { type: "red", label: "Rouge (expulsion)", emoji: "🟥", color: "#e74c3c" },
+  ], [yellowPenaltyMinutes]);
+
+  const { cards, addCard, resetCards, getActivePenalties } = useCardManager(isRunning);
+
   useEffect(() => {
     if (!persist.isLoaded) return;
     persist.save({ scoreA, scoreB, teamA, teamB });
@@ -70,7 +82,13 @@ export default function HockeyScore() {
     setScoreB(0);
     setCurrentPeriod(1);
     resetTimer();
-  }, [resetTimer]);
+    resetCards();
+  }, [resetTimer, resetCards]);
+
+  const handleAddCard = useCallback((team: "A" | "B", cardType: string) => {
+    const cfg = hockeyCards.find((c) => c.type === cardType);
+    addCard(team, cardType, cfg?.penaltySeconds);
+  }, [addCard, hockeyCards]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
@@ -119,6 +137,13 @@ export default function HockeyScore() {
           style={styles.input}
           keyboardType="numeric"
         />
+        <Text style={styles.inputTitle}>Durée pénalité jaune (min)</Text>
+        <TextInput
+          value={yellowPenaltyMinutes.toString()}
+          onChangeText={(t) => setYellowPenaltyMinutes(Number(t))}
+          style={styles.input}
+          keyboardType="numeric"
+        />
       </SettingsModal>
 
       {/* Burger */}
@@ -163,22 +188,48 @@ export default function HockeyScore() {
       {/* Scores */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
+        {getActivePenalties("A").length > getActivePenalties("B").length && (
+          <Text style={styles.inferiority}>⬇ Infériorité</Text>
+        )}
+        {getActivePenalties("B").length > getActivePenalties("A").length && (
+          <Text style={styles.superiority}>⬆ Supériorité</Text>
+        )}
+        <CardTracker team="A" cards={cards} cardTypes={hockeyCards} />
         <TouchableOpacity onPress={() => handleScore("A", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("A", 1)}>
           <Text style={styles.score}>{scoreA}</Text>
         </TouchableOpacity>
+        <CardActionButtons
+          team="A"
+          teamName={teamA}
+          cardTypes={hockeyCards}
+          onAddCard={handleAddCard}
+        />
       </View>
 
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
+        {getActivePenalties("B").length > getActivePenalties("A").length && (
+          <Text style={styles.inferiority}>⬇ Infériorité</Text>
+        )}
+        {getActivePenalties("A").length > getActivePenalties("B").length && (
+          <Text style={styles.superiority}>⬆ Supériorité</Text>
+        )}
+        <CardTracker team="B" cards={cards} cardTypes={hockeyCards} />
         <TouchableOpacity onPress={() => handleScore("B", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("B", 1)}>
           <Text style={styles.score}>{scoreB}</Text>
         </TouchableOpacity>
+        <CardActionButtons
+          team="B"
+          teamName={teamB}
+          cardTypes={hockeyCards}
+          onAddCard={handleAddCard}
+        />
       </View>
     </View>
   );
@@ -219,4 +270,6 @@ const styles = StyleSheet.create({
   timerBtnText: { color: "#fff", fontSize: 13, fontWeight: "bold" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
   input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
+  superiority: { fontSize: 12, color: "#2ecc71", fontWeight: "bold" },
+  inferiority: { fontSize: 12, color: "#e74c3c", fontWeight: "bold" },
 });
