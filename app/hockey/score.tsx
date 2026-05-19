@@ -14,21 +14,23 @@ import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
 
-type RugbySave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
+type HockeySave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
-export default function RugbyScore() {
+type Period = 1 | 2 | 3 | "OT";
+
+export default function HockeyScore() {
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
   const [teamA, setTeamA] = useState("Équipe A");
   const [teamB, setTeamB] = useState("Équipe B");
   const [showModal, setShowModal] = useState(false);
-  const [halfDuration, setHalfDuration] = useState(40);
-  const [isTraining, setIsTraining] = useState(true);
+  const [periodDuration, setPeriodDuration] = useState(20);
+  const [currentPeriod, setCurrentPeriod] = useState<Period>(1);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<RugbySave>("rugby");
+  const persist = usePersistedScore<HockeySave>("hockey");
 
   const playBuzz = useCallback(async () => {
     const { sound: s } = await Audio.Sound.createAsync(
@@ -38,8 +40,14 @@ export default function RugbyScore() {
     await s.playAsync();
   }, []);
 
-  const { timeLeft, isRunning: isHalfRunning, start: startHalfTimer, reset: resetTimer } =
-    useGameTimer(playBuzz);
+  const {
+    timeLeft,
+    isRunning,
+    start,
+    stop,
+    resume,
+    reset: resetTimer,
+  } = useGameTimer(playBuzz);
 
   useEffect(() => {
     if (!persist.isLoaded) return;
@@ -60,6 +68,7 @@ export default function RugbyScore() {
   const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
+    setCurrentPeriod(1);
     resetTimer();
   }, [resetTimer]);
 
@@ -67,6 +76,28 @@ export default function RugbyScore() {
     if (team === "A") setScoreA((s) => Math.max(0, s + delta));
     else setScoreB((s) => Math.max(0, s + delta));
   }, []);
+
+  const nextPeriod = useCallback(() => {
+    resetTimer();
+    if (currentPeriod === 1) setCurrentPeriod(2);
+    else if (currentPeriod === 2) setCurrentPeriod(3);
+    else if (currentPeriod === 3) {
+      if (scoreA !== scoreB) return;
+      setCurrentPeriod("OT");
+    }
+  }, [currentPeriod, scoreA, scoreB, resetTimer]);
+
+  const periodLabel = (p: Period) => {
+    if (p === "OT") return "Prolongation";
+    return `Période ${p}`;
+  };
+
+  const canGoNextPeriod =
+    currentPeriod !== "OT" &&
+    !(currentPeriod === 3 && scoreA !== scoreB);
+
+  const formatTime = (seconds: number) =>
+    `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
@@ -80,75 +111,74 @@ export default function RugbyScore() {
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetScores}>
         <TextInput placeholder="Nom équipe A" value={teamA} onChangeText={setTeamA} style={styles.input} />
         <TextInput placeholder="Nom équipe B" value={teamB} onChangeText={setTeamB} style={styles.input} />
-        <Text style={styles.inputTitle}>Durée mi-temps (min)</Text>
+        <Text style={styles.inputTitle}>Durée d'une période (min)</Text>
         <TextInput
-          placeholder="Durée d'une mi-temps (min)"
-          value={halfDuration.toString()}
-          onChangeText={(t) => setHalfDuration(Number(t))}
+          placeholder="Durée d'une période (min)"
+          value={periodDuration.toString()}
+          onChangeText={(t) => setPeriodDuration(Number(t))}
           style={styles.input}
           keyboardType="numeric"
         />
-        <TouchableOpacity style={styles.switchBtn} onPress={() => setIsTraining((v) => !v)}>
-          <Text style={styles.switchText}>Mode match : {isTraining ? "✅" : "❌"}</Text>
-        </TouchableOpacity>
       </SettingsModal>
 
       {/* Burger */}
       <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
-        <MaterialCommunityIcons name="rugby" size={40} color="white" />
+        <MaterialCommunityIcons name="hockey-sticks" size={40} color="white" />
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
-      {/* Chrono */}
-      {isHalfRunning && (
-        <Text style={styles.timerTopLeft}>
-          ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
-        </Text>
-      )}
-      {isTraining && !isHalfRunning && (
-        <TouchableOpacity onPress={() => startHalfTimer(halfDuration)} style={styles.timerTopLeft}>
-          <Text style={styles.timerStart}>▶️</Text>
-        </TouchableOpacity>
-      )}
+      {/* Période + Chrono */}
+      <View style={styles.timerArea}>
+        <Text style={styles.periodLabel}>{periodLabel(currentPeriod)}</Text>
 
-      {/* Équipe A */}
+        {/* Chrono */}
+        <Text style={styles.timerDisplay}>
+          {isRunning || timeLeft > 0 ? formatTime(timeLeft) : formatTime(periodDuration * 60)}
+        </Text>
+
+        {/* Contrôles chrono */}
+        <View style={styles.timerControls}>
+          {!isRunning ? (
+            <TouchableOpacity
+              style={styles.timerBtn}
+              onPress={() => timeLeft > 0 ? resume() : start(periodDuration)}
+            >
+              <Text style={styles.timerBtnText}>▶ {timeLeft > 0 ? "Reprendre" : "Démarrer"}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[styles.timerBtn, styles.timerBtnPause]} onPress={stop}>
+              <Text style={styles.timerBtnText}>⏸ Pause</Text>
+            </TouchableOpacity>
+          )}
+          {canGoNextPeriod && (
+            <TouchableOpacity style={[styles.timerBtn, styles.timerBtnNext]} onPress={nextPeriod}>
+              <Text style={styles.timerBtnText}>
+                {currentPeriod === 3 ? "Prolongation ▶" : `Période ${(currentPeriod as number) + 1} ▶`}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Scores */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
         <TouchableOpacity onPress={() => handleScore("A", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
-        <Text style={styles.score}>{scoreA}</Text>
-        <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("A", 2)}>
-            <Text style={styles.btn}>+2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 3)}>
-            <Text style={styles.btn}>+3</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 5)}>
-            <Text style={styles.btn}>+5</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => handleScore("A", 1)}>
+          <Text style={styles.score}>{scoreA}</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Équipe B */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
         <TouchableOpacity onPress={() => handleScore("B", -1)}>
           <MaterialCommunityIcons name="eraser" size={32} color="white" />
         </TouchableOpacity>
-        <Text style={styles.score}>{scoreB}</Text>
-        <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("B", 2)}>
-            <Text style={styles.btn}>+2</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 3)}>
-            <Text style={styles.btn}>+3</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 5)}>
-            <Text style={styles.btn}>+5</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => handleScore("B", 1)}>
+          <Text style={styles.score}>{scoreB}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -166,13 +196,27 @@ const styles = StyleSheet.create({
   teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   score: { color: "#fff", fontSize: 120, fontWeight: "bold" },
-  row: { flexDirection: "row", gap: 20, marginTop: 10 },
-  burger: { position: "absolute", top: 30, left: "48%", zIndex: 10 },
-  timerTopLeft: { position: "absolute", top: 30, left: 20, color: "#fff", fontSize: 20, fontWeight: "bold" },
-  timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
+  burger: { position: "absolute", top: 30, left: "42%", zIndex: 10 },
+  timerArea: {
+    position: "absolute",
+    top: 30,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 5,
+  },
+  periodLabel: { color: "#aaa", fontSize: 14, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" },
+  timerDisplay: { color: "#fff", fontSize: 36, fontWeight: "bold", marginVertical: 4 },
+  timerControls: { flexDirection: "row", gap: 8 },
+  timerBtn: {
+    backgroundColor: "#1a7a3a",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  timerBtnPause: { backgroundColor: "#7a5a1a" },
+  timerBtnNext: { backgroundColor: "#1a3a7a" },
+  timerBtnText: { color: "#fff", fontSize: 13, fontWeight: "bold" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
   input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
-  btn: { fontSize: 20, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
-  switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
-  switchText: { color: "#fff", textAlign: "center" },
 });

@@ -5,6 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Modal,
+  Pressable,
   useWindowDimensions,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -38,6 +40,7 @@ export default function TennisScore() {
   const [gamesToWinSet, setGamesToWinSet] = useState(6);
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
   const [isTieBreak, setIsTieBreak] = useState(false);
+  const [matchWinner, setMatchWinner] = useState<string | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
@@ -179,10 +182,7 @@ export default function TennisScore() {
     setGamesB(0);
 
     if (newSetsA === setsToWin || newSetsB === setsToWin) {
-      alert(
-        `Match terminé ! ${newSetsA === setsToWin ? teamA : teamB} a gagné.`
-      );
-      resetMatch();
+      setMatchWinner(newSetsA === setsToWin ? teamA : teamB);
     }
   };
 
@@ -197,7 +197,7 @@ export default function TennisScore() {
         onDiscard={persist.clear}
       />
 
-      {/* MODAL */}
+      {/* MODAL paramètres */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
         <TextInput
           placeholder="Nom Joueur A"
@@ -241,6 +241,25 @@ export default function TennisScore() {
           />
         </View>
       </SettingsModal>
+
+      {/* Modal fin de match */}
+      <Modal visible={!!matchWinner} transparent animationType="fade">
+        <Pressable style={styles.winOverlay} onPress={() => setMatchWinner(null)}>
+          <Pressable style={styles.winBox} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.winTitle}>🏆 Match terminé</Text>
+            <Text style={styles.winName}>{matchWinner} a gagné !</Text>
+            <TouchableOpacity
+              style={styles.newGameBtn}
+              onPress={() => { resetMatch(); setMatchWinner(null); }}
+            >
+              <Text style={styles.newGameText}>Nouvelle partie</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMatchWinner(null)}>
+              <Text style={styles.closeText}>Fermer</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
         <MaterialIcons name="sports-tennis" size={44} color="white" />
@@ -348,5 +367,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginVertical: 2,
     fontFamily: "monospace",
+  },
+  winOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  winBox: {
+    backgroundColor: "#222",
+    padding: 30,
+    borderRadius: 16,
+    width: "80%",
+    alignItems: "center",
+  },
+  winTitle: {
+    fontSize: 26,
+    color: "#fff",
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  winName: {
+    fontSize: 22,
+    color: "#4caf50",
+    fontWeight: "bold",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  newGameBtn: {
+    backgroundColor: "#4caf50",
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    marginBottom: 12,
+    width: "100%",
+    alignItems: "center",
+  },
+  newGameText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  closeText: {
+    color: "#aaa",
+    fontSize: 16,
+    textDecorationLine: "underline",
   },
 });

@@ -5,6 +5,7 @@ type UseGameTimer = {
   isRunning: boolean;
   start: (durationMinutes: number) => void;
   stop: () => void;
+  resume: () => void;
   reset: () => void;
 };
 
@@ -48,10 +49,27 @@ export function useGameTimer(onEnd?: () => void): UseGameTimer {
     [isRunning]
   );
 
+  const resume = useCallback(() => {
+    if (isRunning || timeLeft === 0) return;
+    setIsRunning(true);
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          setIsRunning(false);
+          onEndRef.current?.();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [isRunning, timeLeft]);
+
   const reset = useCallback(() => {
     stop();
     setTimeLeft(0);
   }, [stop]);
 
-  return { timeLeft, isRunning, start, stop, reset };
+  return { timeLeft, isRunning, start, stop, resume, reset };
 }

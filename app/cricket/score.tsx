@@ -23,7 +23,7 @@ type CricketSave = {
 export default function CricketScore() {
   const [teamA, setTeamA] = useState("Équipe A");
   const [teamB, setTeamB] = useState("Équipe B");
-
+  const [startingBattingTeam, setStartingBattingTeam] = useState<"A" | "B">("A");
   const [currentInning, setCurrentInning] = useState<1 | 2>(1);
   const [battingTeam, setBattingTeam] = useState<"A" | "B">("A");
 
@@ -77,25 +77,19 @@ export default function CricketScore() {
       setCurrentInning(2);
       setBattingTeam(battingTeam === "A" ? "B" : "A");
     } else {
-      const scoreA = runsA;
-      const scoreB = runsB;
-      if (scoreA > scoreB) setWinner(teamA);
-      else if (scoreB > scoreA) setWinner(teamB);
+      if (runsA > runsB) setWinner(teamA);
+      else if (runsB > runsA) setWinner(teamB);
       else setWinner("Match nul");
     }
   };
 
   const resetMatch = useCallback(() => {
-    setRunsA(0);
-    setWicketsA(0);
-    setOversA(0);
-    setRunsB(0);
-    setWicketsB(0);
-    setOversB(0);
+    setRunsA(0); setWicketsA(0); setOversA(0);
+    setRunsB(0); setWicketsB(0); setOversB(0);
     setCurrentInning(1);
-    setBattingTeam("A");
+    setBattingTeam(startingBattingTeam);
     setWinner(null);
-  }, []);
+  }, [startingBattingTeam]);
 
   return (
     <View style={styles.container}>
@@ -111,7 +105,7 @@ export default function CricketScore() {
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
-      {/* MODAL */}
+      {/* MODAL paramètres */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
         <TextInput
           placeholder="Nom équipe A"
@@ -125,17 +119,38 @@ export default function CricketScore() {
           onChangeText={setTeamB}
           style={styles.input}
         />
+        <Text style={styles.inputTitle}>Équipe qui bat en premier</Text>
+        <View style={styles.teamSelector}>
+          <TouchableOpacity
+            style={[styles.selectorBtn, startingBattingTeam === "A" && styles.selectorActive]}
+            onPress={() => { setStartingBattingTeam("A"); setBattingTeam("A"); setCurrentInning(1); }}
+          >
+            <Text style={styles.selectorText}>{teamA}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.selectorBtn, startingBattingTeam === "B" && styles.selectorActive]}
+            onPress={() => { setStartingBattingTeam("B"); setBattingTeam("B"); setCurrentInning(1); }}
+          >
+            <Text style={styles.selectorText}>{teamB}</Text>
+          </TouchableOpacity>
+        </View>
       </SettingsModal>
 
-      {/* Winner Modal */}
+      {/* Modal gagnant */}
       <Modal visible={!!winner} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setWinner(null)}>
           <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>
-              {winner === "Match nul" ? "Match nul" : `Gagnant : ${winner}`}
+              {winner === "Match nul" ? "🤝 Match nul" : `🏆 Gagnant : ${winner}`}
             </Text>
+            <TouchableOpacity
+              style={styles.newGameBtn}
+              onPress={() => { resetMatch(); setWinner(null); }}
+            >
+              <Text style={styles.newGameText}>Nouvelle partie</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setWinner(null)}>
-              <Text style={styles.btn}>✅</Text>
+              <Text style={styles.closeText}>Fermer</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -143,32 +158,22 @@ export default function CricketScore() {
 
       {/* Équipe en cours */}
       <Text style={styles.info}>
-        Inning {currentInning} - Batting : {battingTeam === "A" ? teamA : teamB}
+        Inning {currentInning} — Batting : {battingTeam === "A" ? teamA : teamB}
       </Text>
 
       {/* Équipe A */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
-        <Text style={styles.score}>
-          🏏 {runsA}/{wicketsA} ({oversA})
-        </Text>
+        <Text style={styles.score}>🏏 {runsA}/{wicketsA} ({oversA})</Text>
         {battingTeam === "A" && currentInning === 1 && (
           <View style={styles.controls}>
-            <TouchableOpacity onPress={() => handleRun("A", 1)}>
-              <Text style={styles.btn}>+1</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("A", 4)}>
-              <Text style={styles.btn}>+4</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("A", 6)}>
-              <Text style={styles.btn}>+6</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("A", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("A", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => handleWicket("A")}>
               <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleOver("A")}>
-              <Text style={styles.btn}>Over</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleOver("A")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
           </View>
         )}
       </View>
@@ -176,26 +181,16 @@ export default function CricketScore() {
       {/* Équipe B */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
-        <Text style={styles.score}>
-          🏏 {runsB}/{wicketsB} ({oversB})
-        </Text>
+        <Text style={styles.score}>🏏 {runsB}/{wicketsB} ({oversB})</Text>
         {battingTeam === "B" && currentInning === 2 && (
           <View style={styles.controls}>
-            <TouchableOpacity onPress={() => handleRun("B", 1)}>
-              <Text style={styles.btn}>+1</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("B", 4)}>
-              <Text style={styles.btn}>+4</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("B", 6)}>
-              <Text style={styles.btn}>+6</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("B", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleRun("B", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => handleWicket("B")}>
               <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleOver("B")}>
-              <Text style={styles.btn}>Over</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleOver("B")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
           </View>
         )}
       </View>
@@ -222,19 +217,9 @@ const styles = StyleSheet.create({
     left: "5%",
     zIndex: 10,
   },
-  teamBox: {
-    alignItems: "center",
-    gap: 10,
-  },
-  teamName: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  score: {
-    color: "#fff",
-    fontSize: 28,
-  },
+  teamBox: { alignItems: "center", gap: 10 },
+  teamName: { color: "#fff", fontSize: 24, fontWeight: "bold" },
+  score: { color: "#fff", fontSize: 28 },
   controls: {
     flexDirection: "row",
     gap: 10,
@@ -250,30 +235,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     fontSize: 16,
   },
-  info: {
-    color: "#ccc",
-    fontSize: 18,
-    marginBottom: 10,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBox: {
-    backgroundColor: "#222",
-    padding: 20,
-    borderRadius: 12,
-    width: "80%",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 22,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "center",
-  },
+  info: { color: "#ccc", fontSize: 18, marginBottom: 10 },
+  inputTitle: { fontSize: 12, color: "#fff", marginBottom: 6, textAlign: "center" },
   input: {
     backgroundColor: "#333",
     color: "#fff",
@@ -282,4 +245,39 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     width: "100%",
   },
+  teamSelector: { flexDirection: "row", gap: 10, marginBottom: 12, width: "100%" },
+  selectorBtn: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: "#444",
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  selectorActive: { backgroundColor: "#1a7a3a", borderWidth: 1, borderColor: "#4caf50" },
+  selectorText: { color: "#fff", fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBox: {
+    backgroundColor: "#222",
+    padding: 24,
+    borderRadius: 16,
+    width: "80%",
+    alignItems: "center",
+  },
+  modalTitle: { fontSize: 22, color: "#fff", marginBottom: 20, textAlign: "center" },
+  newGameBtn: {
+    backgroundColor: "#4caf50",
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    marginBottom: 12,
+    width: "100%",
+    alignItems: "center",
+  },
+  newGameText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  closeText: { color: "#aaa", fontSize: 16, textDecorationLine: "underline" },
 });

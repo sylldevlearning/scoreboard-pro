@@ -178,6 +178,7 @@ export default function BasketScore() {
           <Text style={styles.score}>{scoreA}</Text>
         </TouchableOpacity>
         <View style={styles.row}>
+          <TouchableOpacity onPress={() => handleScore("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => startTimeout("A")}><Text style={styles.btn}>T ({timeoutsA})</Text></TouchableOpacity>
@@ -194,6 +195,7 @@ export default function BasketScore() {
           <Text style={styles.score}>{scoreB}</Text>
         </TouchableOpacity>
         <View style={styles.row}>
+          <TouchableOpacity onPress={() => handleScore("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>

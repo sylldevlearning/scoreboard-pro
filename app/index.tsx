@@ -44,6 +44,11 @@ const sports = [
     key: "baseball",
     image: require("../assets/sports/baseball.jpg"),
   },
+  {
+    name: "Hockey",
+    key: "hockey",
+    image: require("../assets/sports/football.jpg"), // TODO: remplacer par hockey.jpg
+  },
 ];
 
 export default function HomeScreen() {
