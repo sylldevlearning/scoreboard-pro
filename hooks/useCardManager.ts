@@ -44,7 +44,7 @@ export function useCardManager(isMatchRunning: boolean = true): UseCardManager {
           if (card.expired || card.remainingSeconds === undefined || card.remainingSeconds <= 0)
             return card;
           const next = card.remainingSeconds - 1;
-          return { ...card, remainingSeconds: next, expired: next <= 0 };
+          return { ...card, remainingSeconds: Math.max(0, next), expired: next <= 0 };
         });
       });
     }, 1000);

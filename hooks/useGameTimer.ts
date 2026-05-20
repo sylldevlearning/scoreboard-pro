@@ -19,6 +19,16 @@ export function useGameTimer(onEnd?: () => void): UseGameTimer {
     onEndRef.current = onEnd;
   });
 
+  // Clear interval on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
   const stop = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -35,7 +45,8 @@ export function useGameTimer(onEnd?: () => void): UseGameTimer {
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
-          if (prev <= 1) {
+          if (prev <= 0) return 0; // guard: already expired, no double-fire
+          if (prev === 1) {
             clearInterval(timerRef.current!);
             timerRef.current = null;
             setIsRunning(false);
@@ -54,7 +65,8 @@ export function useGameTimer(onEnd?: () => void): UseGameTimer {
     setIsRunning(true);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) {
+        if (prev <= 0) return 0; // guard
+        if (prev === 1) {
           clearInterval(timerRef.current!);
           timerRef.current = null;
           setIsRunning(false);

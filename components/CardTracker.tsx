@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { Card, CardTypeConfig } from "@/hooks/useCardManager";
 
@@ -13,7 +14,7 @@ function fmt(seconds: number) {
   return `${m}:${s}`;
 }
 
-export default function CardTracker({ team, cards, cardTypes }: Props) {
+function CardTracker({ team, cards, cardTypes }: Props) {
   const teamCards = cards.filter((c) => c.team === team);
   const activePenalties = teamCards.filter(
     (c) => !c.expired && c.remainingSeconds !== undefined
@@ -55,6 +56,8 @@ export default function CardTracker({ team, cards, cardTypes }: Props) {
     </View>
   );
 }
+
+export default memo(CardTracker);
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", gap: 2, marginVertical: 2 },

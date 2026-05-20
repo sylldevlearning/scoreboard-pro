@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ type Props = {
   onAddCard: (team: "A" | "B", cardType: string) => void;
 };
 
-export default function CardActionButtons({
+function CardActionButtons({
   team,
   teamName,
   cardTypes,
@@ -95,6 +95,8 @@ export default function CardActionButtons({
     </>
   );
 }
+
+export default memo(CardActionButtons);
 
 const styles = StyleSheet.create({
   trigger: {

@@ -32,6 +32,13 @@ export default function BasketScore() {
   const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
+  // Cleanup timeout interval on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutIntervalRef.current) clearInterval(timeoutIntervalRef.current);
+    };
+  }, []);
+
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<BasketballSave>("basketball");
@@ -72,8 +79,10 @@ export default function BasketScore() {
 
     timeoutIntervalRef.current = setInterval(() => {
       setTimeoutTimer((prev) => {
-        if (prev <= 1) {
+        if (prev <= 0) return 0; // guard: already expired, prevent double-fire
+        if (prev === 1) {
           clearInterval(timeoutIntervalRef.current!);
+          timeoutIntervalRef.current = null;
           setIsTimeout(false);
           playBuzz();
           return 0;

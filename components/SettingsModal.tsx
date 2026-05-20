@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Modal, Pressable, View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 
@@ -8,7 +9,7 @@ type Props = {
   children?: React.ReactNode;
 };
 
-export default function SettingsModal({ visible, onClose, onReset, children }: Props) {
+function SettingsModal({ visible, onClose, onReset, children }: Props) {
   const router = useRouter();
 
   return (
@@ -35,6 +36,8 @@ export default function SettingsModal({ visible, onClose, onReset, children }: P
     </Modal>
   );
 }
+
+export default memo(SettingsModal);
 
 const styles = StyleSheet.create({
   overlay: {

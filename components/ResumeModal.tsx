@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from "react-native";
 
 type Props = {
@@ -6,7 +7,7 @@ type Props = {
   onDiscard: () => void;
 };
 
-export default function ResumeModal({ visible, onResume, onDiscard }: Props) {
+function ResumeModal({ visible, onResume, onDiscard }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -26,6 +27,8 @@ export default function ResumeModal({ visible, onResume, onDiscard }: Props) {
     </Modal>
   );
 }
+
+export default memo(ResumeModal);
 
 const styles = StyleSheet.create({
   overlay: {

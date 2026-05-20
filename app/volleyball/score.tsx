@@ -58,6 +58,13 @@ export default function VolleyballScore() {
   const persist = usePersistedScore<VolleyballSave>("volleyball");
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+
+  // Cleanup timeout interval on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      if (timerInterval.current) clearInterval(timerInterval.current);
+    };
+  }, []);
   const { cards, addCard, resetCards } = useCardManager();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
@@ -98,8 +105,10 @@ export default function VolleyballScore() {
 
     timerInterval.current = setInterval(() => {
       setTimer((prev) => {
-        if (prev <= 1) {
+        if (prev <= 0) return 0; // guard: already expired, prevent double-fire
+        if (prev === 1) {
           clearInterval(timerInterval.current!);
+          timerInterval.current = null;
           setIsTimeout(false);
           playBuzz();
           return 0;
@@ -126,7 +135,7 @@ export default function VolleyballScore() {
     resetCards();
   }, [startScore, resetCards]);
 
-  const handleScoreChange = (team: "A" | "B", delta: number) => {
+  const handleScoreChange = useCallback((team: "A" | "B", delta: number) => {
     const newScoreA = team === "A" ? scoreA + delta : scoreA;
     const newScoreB = team === "B" ? scoreB + delta : scoreB;
     setScoreA(newScoreA);
@@ -171,14 +180,14 @@ export default function VolleyballScore() {
         setHasSwitchedAt8(true);
       }
     }
-  };
+  }, [scoreA, scoreB, setsA, setsB, tieBreakEnabled, nbSetsToWin, teamA, teamB, startScore, hasSwitchedAt8, playBuzz]);
 
-  const handleAddCard = (team: "A" | "B", cardType: string) => {
+  const handleAddCard = useCallback((team: "A" | "B", cardType: string) => {
     addCard(team, cardType);
     if (cardType === "red") {
       handleScoreChange(team === "A" ? "B" : "A", 1);
     }
-  };
+  }, [addCard, handleScoreChange]);
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
