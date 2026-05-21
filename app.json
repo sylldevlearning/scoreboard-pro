@@ -31,6 +31,9 @@
     },
     "plugins": [
       "expo-router",
+      "expo-screen-orientation",
+      "expo-av",
+      "expo-navigation-bar",
       [
         "react-native-google-mobile-ads",
         {
