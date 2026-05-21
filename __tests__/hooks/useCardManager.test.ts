@@ -94,9 +94,8 @@ describe("useCardManager", () => {
   });
 
   it("timer pauses mid-countdown when isMatchRunning flips to false", () => {
-    let isRunning = true;
     const { result, rerender } = renderHook(
-      ({ running }) => useCardManager(running),
+      ({ running }: { running: boolean }) => useCardManager(running),
       { initialProps: { running: true } }
     );
     act(() => { result.current.addCard("A", "yellow", 10); });

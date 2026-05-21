@@ -8,7 +8,7 @@ export default function ErrorBoundary({ error }: { error: Error }) {
     <View style={styles.container}>
       <Text style={styles.title}>Une erreur est survenue</Text>
       <Text style={styles.message}>{error.message}</Text>
-      <TouchableOpacity style={styles.btn} onPress={() => router.replace("/")}>
+      <TouchableOpacity style={styles.btn} onPress={() => router.replace("/" as any)}>
         <Text style={styles.btnText}>Retour à l'accueil</Text>
       </TouchableOpacity>
     </View>

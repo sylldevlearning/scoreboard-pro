@@ -4,17 +4,26 @@ import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import {
+import MobileAds, {
   BannerAd,
   BannerAdSize,
   TestIds,
 } from "react-native-google-mobile-ads";
 
 const REAL_BANNER_UNIT_ID = process.env.EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID ?? "";
-const bannerUnitId = __DEV__ ? TestIds.BANNER : REAL_BANNER_UNIT_ID;
+// Fallback to test ID if real unit ID is missing (prevents crash on empty string)
+const bannerUnitId = __DEV__ || !REAL_BANNER_UNIT_ID
+  ? TestIds.BANNER
+  : REAL_BANNER_UNIT_ID;
 
 export default function RootLayout() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    MobileAds().initialize().catch(() => {
+      // Silently ignore AdMob init failure — app continues without ads
+    });
+  }, []);
 
   useEffect(() => {
     NavigationBar.setVisibilityAsync("hidden");

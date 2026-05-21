@@ -21,7 +21,7 @@ function SettingsModal({ visible, onClose, onReset, children }: Props) {
           {children}
 
           <View style={styles.buttons}>
-            <Pressable style={styles.btn} onPress={() => router.push("/")}>
+            <Pressable style={styles.btn} onPress={() => router.push("/" as any)}>
               <Text style={styles.btnText}>🏠</Text>
             </Pressable>
             <Pressable style={styles.btn} onPress={onReset}>

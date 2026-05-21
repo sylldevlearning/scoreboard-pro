@@ -4,8 +4,8 @@ type TennisScore = 0 | 15 | 30 | 40 | "A" | "=";
 const scoreOrder: (0 | 15 | 30 | 40)[] = [0, 15, 30, 40];
 
 function nextScore(current: TennisScore): TennisScore {
-  const index = scoreOrder.indexOf(current as number);
-  return index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40;
+  const index = (scoreOrder as number[]).indexOf(current as number);
+  return (index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40) as TennisScore;
 }
 
 // Simulate a point, returns { newScoreA, newScoreB, gameWon: "A"|"B"|null }

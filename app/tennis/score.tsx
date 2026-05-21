@@ -75,14 +75,14 @@ export default function TennisScore() {
   }, []);
 
   const nextScore = (current: TennisScore): TennisScore => {
-    const index = scoreOrder.indexOf(current as number);
-    return index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40;
+    const index = (scoreOrder as number[]).indexOf(current as number);
+    return (index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40) as TennisScore;
   };
 
   const handlePoint = (team: "A" | "B") => {
     if (isTieBreak) {
-      if (team === "A") setScoreA((prev) => Number(prev) + 1);
-      else setScoreB((prev) => Number(prev) + 1);
+      if (team === "A") setScoreA((prev) => (Number(prev) + 1) as TennisScore);
+      else setScoreB((prev) => (Number(prev) + 1) as TennisScore);
 
       const a = team === "A" ? Number(scoreA) + 1 : Number(scoreA);
       const b = team === "B" ? Number(scoreB) + 1 : Number(scoreB);
