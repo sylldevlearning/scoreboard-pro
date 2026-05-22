@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
@@ -24,6 +25,15 @@ type TennisSave = {
 };
 
 type TennisScore = 0 | 15 | 30 | 40 | "A" | "=";
+
+type TennisSnapshot = {
+  scoreA: TennisScore; scoreB: TennisScore;
+  gamesA: number; gamesB: number;
+  setsA: number; setsB: number;
+  setsHistory: number[][];
+  isTieBreak: boolean;
+  matchWinner: string | null;
+};
 
 export default function TennisScore() {
   const [scoreA, setScoreA] = useState<TennisScore>(0);
@@ -41,6 +51,7 @@ export default function TennisScore() {
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
   const [isTieBreak, setIsTieBreak] = useState(false);
   const [matchWinner, setMatchWinner] = useState<string | null>(null);
+  const [prevSnapshot, setPrevSnapshot] = useState<TennisSnapshot | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
@@ -72,7 +83,22 @@ export default function TennisScore() {
     setSetsB(0);
     setSetsHistory([]);
     setIsTieBreak(false);
+    setPrevSnapshot(null);
   }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!prevSnapshot) return;
+    setScoreA(prevSnapshot.scoreA);
+    setScoreB(prevSnapshot.scoreB);
+    setGamesA(prevSnapshot.gamesA);
+    setGamesB(prevSnapshot.gamesB);
+    setSetsA(prevSnapshot.setsA);
+    setSetsB(prevSnapshot.setsB);
+    setSetsHistory(prevSnapshot.setsHistory);
+    setIsTieBreak(prevSnapshot.isTieBreak);
+    setMatchWinner(prevSnapshot.matchWinner);
+    setPrevSnapshot(null);
+  }, [prevSnapshot]);
 
   const nextScore = (current: TennisScore): TennisScore => {
     const index = (scoreOrder as number[]).indexOf(current as number);
@@ -80,6 +106,7 @@ export default function TennisScore() {
   };
 
   const handlePoint = (team: "A" | "B") => {
+    setPrevSnapshot({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, isTieBreak, matchWinner });
     if (isTieBreak) {
       if (team === "A") setScoreA((prev) => (Number(prev) + 1) as TennisScore);
       else setScoreB((prev) => (Number(prev) + 1) as TennisScore);
@@ -266,6 +293,14 @@ export default function TennisScore() {
         <Text style={{ fontSize: 44, color: "white" }}>☰</Text>
       </TouchableOpacity>
 
+      {/* Undo dernier point — bouton partagé centré */}
+      {prevSnapshot && (
+        <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
+          <MaterialCommunityIcons name="eraser" size={26} color="#aaa" />
+          <Text style={styles.undoLabel}>Annuler</Text>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.scoresWrapper}>
         <View style={styles.teamBox}>
           <Text style={styles.teamName}>{teamA}</Text>
@@ -344,6 +379,20 @@ const styles = StyleSheet.create({
     left: "48%",
     zIndex: 10,
   },
+  undoBtn: {
+    position: "absolute",
+    bottom: 20,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  undoLabel: { color: "#aaa", fontSize: 13, fontWeight: "600" },
   inputTitle: {
     fontSize: 18,
     color: "#fff",

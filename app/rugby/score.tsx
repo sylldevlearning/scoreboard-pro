@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -36,9 +36,30 @@ export default function RugbyScore() {
   const [playersPerTeam, setPlayersPerTeam] = useState(15);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
+  // Undo: last scored action per team
+  const lastActionA = useRef<number | null>(null);
+  const lastActionB = useRef<number | null>(null);
+  const [undoToast, setUndoToast] = useState<string | null>(null);
+  const undoToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<RugbySave>("rugby");
+
+  useEffect(() => {
+    return () => {
+      if (undoToastRef.current) clearTimeout(undoToastRef.current);
+    };
+  }, []);
+
+  const showUndoToast = useCallback((msg: string) => {
+    if (undoToastRef.current) clearTimeout(undoToastRef.current);
+    setUndoToast(msg);
+    undoToastRef.current = setTimeout(() => {
+      setUndoToast(null);
+      undoToastRef.current = null;
+    }, 1500);
+  }, []);
 
   const playBuzz = useCallback(async () => {
     const { sound: s } = await Audio.Sound.createAsync(
@@ -72,6 +93,9 @@ export default function RugbyScore() {
   const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
+    lastActionA.current = null;
+    lastActionB.current = null;
+    setUndoToast(null);
     resetTimer();
     resetCards();
   }, [resetTimer, resetCards]);
@@ -82,9 +106,27 @@ export default function RugbyScore() {
   }, [addCard]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
-    if (team === "A") setScoreA((s) => Math.max(0, s + delta));
-    else setScoreB((s) => Math.max(0, s + delta));
+    if (team === "A") {
+      setScoreA((s) => Math.max(0, s + delta));
+      lastActionA.current = delta;
+    } else {
+      setScoreB((s) => Math.max(0, s + delta));
+      lastActionB.current = delta;
+    }
   }, []);
+
+  const handleUndo = useCallback((team: "A" | "B") => {
+    const last = team === "A" ? lastActionA.current : lastActionB.current;
+    if (last === null) return;
+    if (team === "A") {
+      setScoreA((s) => Math.max(0, s - last));
+      lastActionA.current = null;
+    } else {
+      setScoreB((s) => Math.max(0, s - last));
+      lastActionB.current = null;
+    }
+    showUndoToast(`+${last} annulé`);
+  }, [showUndoToast]);
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
@@ -143,8 +185,8 @@ export default function RugbyScore() {
           👤 {getPlayersOnField("A", playersPerTeam)}/{playersPerTeam}
         </Text>
         <CardTracker team="A" cards={cards} cardTypes={RUGBY_CARDS} />
-        <TouchableOpacity onPress={() => handleScore("A", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
+        <TouchableOpacity onPress={() => handleUndo("A")} style={styles.undoBtn}>
+          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
         </TouchableOpacity>
         <Text style={styles.score}>{scoreA}</Text>
         <View style={styles.row}>
@@ -173,8 +215,8 @@ export default function RugbyScore() {
           👤 {getPlayersOnField("B", playersPerTeam)}/{playersPerTeam}
         </Text>
         <CardTracker team="B" cards={cards} cardTypes={RUGBY_CARDS} />
-        <TouchableOpacity onPress={() => handleScore("B", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
+        <TouchableOpacity onPress={() => handleUndo("B")} style={styles.undoBtn}>
+          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
         </TouchableOpacity>
         <Text style={styles.score}>{scoreB}</Text>
         <View style={styles.row}>
@@ -195,6 +237,13 @@ export default function RugbyScore() {
           onAddCard={handleAddCard}
         />
       </View>
+
+      {/* Toast undo */}
+      {undoToast && (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastText}>{undoToast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -221,4 +270,15 @@ const styles = StyleSheet.create({
   playerCount: { fontSize: 13, color: "#aaa", fontWeight: "600" },
   switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
   switchText: { color: "#fff", textAlign: "center" },
+  undoBtn: { padding: 4, opacity: 0.7 },
+  toast: {
+    position: "absolute",
+    bottom: 60,
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  toastText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 });

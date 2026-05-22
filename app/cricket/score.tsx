@@ -54,23 +54,38 @@ export default function CricketScore() {
     setCurrentInning(data.currentInning); setBattingTeam(data.battingTeam);
   }, [persist]);
 
-  const handleRun = (team: "A" | "B", run: number) => {
+  const handleRun = useCallback((team: "A" | "B", run: number) => {
     if (team === "A") setRunsA((r) => r + run);
     else setRunsB((r) => r + run);
-  };
+  }, []);
 
-  const handleWicket = (team: "A" | "B") => {
+  const handleWicket = useCallback((team: "A" | "B") => {
     if (team === "A") {
       if (wicketsA < 10) setWicketsA((w) => w + 1);
     } else {
       if (wicketsB < 10) setWicketsB((w) => w + 1);
     }
-  };
+  }, [wicketsA, wicketsB]);
 
-  const handleOver = (team: "A" | "B") => {
+  const handleOver = useCallback((team: "A" | "B") => {
     if (team === "A") setOversA((o) => o + 1);
     else setOversB((o) => o + 1);
-  };
+  }, []);
+
+  const handleCorrectionRun = useCallback((team: "A" | "B") => {
+    if (team === "A") setRunsA((r) => Math.max(0, r - 1));
+    else setRunsB((r) => Math.max(0, r - 1));
+  }, []);
+
+  const handleCorrectionWicket = useCallback((team: "A" | "B") => {
+    if (team === "A") setWicketsA((w) => Math.max(0, w - 1));
+    else setWicketsB((w) => Math.max(0, w - 1));
+  }, []);
+
+  const handleCorrectionOver = useCallback((team: "A" | "B") => {
+    if (team === "A") setOversA((o) => Math.max(0, o - 1));
+    else setOversB((o) => Math.max(0, o - 1));
+  }, []);
 
   const endInning = () => {
     if (currentInning === 1) {
@@ -166,15 +181,31 @@ export default function CricketScore() {
         <Text style={styles.teamName}>{teamA}</Text>
         <Text style={styles.score}>🏏 {runsA}/{wicketsA} ({oversA})</Text>
         {battingTeam === "A" && currentInning === 1 && (
-          <View style={styles.controls}>
-            <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("A", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("A", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleWicket("A")}>
-              <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleOver("A")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
-          </View>
+          <>
+            <View style={styles.controls}>
+              <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleRun("A", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleRun("A", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleWicket("A")}>
+                <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleOver("A")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
+            </View>
+            <View style={styles.corrections}>
+              <TouchableOpacity onPress={() => handleCorrectionRun("A")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>run</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleCorrectionWicket("A")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>wkt</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleCorrectionOver("A")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>over</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
 
@@ -183,15 +214,31 @@ export default function CricketScore() {
         <Text style={styles.teamName}>{teamB}</Text>
         <Text style={styles.score}>🏏 {runsB}/{wicketsB} ({oversB})</Text>
         {battingTeam === "B" && currentInning === 2 && (
-          <View style={styles.controls}>
-            <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("B", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleRun("B", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleWicket("B")}>
-              <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleOver("B")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
-          </View>
+          <>
+            <View style={styles.controls}>
+              <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleRun("B", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleRun("B", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleWicket("B")}>
+                <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleOver("B")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
+            </View>
+            <View style={styles.corrections}>
+              <TouchableOpacity onPress={() => handleCorrectionRun("B")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>run</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleCorrectionWicket("B")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>wkt</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleCorrectionOver("B")} style={styles.corrBtn}>
+                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                <Text style={styles.corrLabel}>over</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
 
@@ -236,6 +283,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   info: { color: "#ccc", fontSize: 18, marginBottom: 10 },
+  corrections: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  corrBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  corrLabel: { color: "#aaa", fontSize: 12, fontWeight: "600" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 6, textAlign: "center" },
   input: {
     backgroundColor: "#333",

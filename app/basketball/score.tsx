@@ -32,16 +32,31 @@ export default function BasketScore() {
   const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  // Cleanup timeout interval on unmount
+  // Undo: last scored action per team
+  const lastActionA = useRef<number | null>(null);
+  const lastActionB = useRef<number | null>(null);
+  const [undoToast, setUndoToast] = useState<string | null>(null);
+  const undoToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     return () => {
       if (timeoutIntervalRef.current) clearInterval(timeoutIntervalRef.current);
+      if (undoToastRef.current) clearTimeout(undoToastRef.current);
     };
   }, []);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const persist = usePersistedScore<BasketballSave>("basketball");
+
+  const showUndoToast = useCallback((msg: string) => {
+    if (undoToastRef.current) clearTimeout(undoToastRef.current);
+    setUndoToast(msg);
+    undoToastRef.current = setTimeout(() => {
+      setUndoToast(null);
+      undoToastRef.current = null;
+    }, 1500);
+  }, []);
 
   const playBuzz = useCallback(async () => {
     const { sound: s } = await Audio.Sound.createAsync(
@@ -79,7 +94,7 @@ export default function BasketScore() {
 
     timeoutIntervalRef.current = setInterval(() => {
       setTimeoutTimer((prev) => {
-        if (prev <= 0) return 0; // guard: already expired, prevent double-fire
+        if (prev <= 0) return 0;
         if (prev === 1) {
           clearInterval(timeoutIntervalRef.current!);
           timeoutIntervalRef.current = null;
@@ -98,15 +113,36 @@ export default function BasketScore() {
   const resetScores = useCallback(() => {
     setScoreA(0);
     setScoreB(0);
+    lastActionA.current = null;
+    lastActionB.current = null;
+    setUndoToast(null);
     setTimeoutsA(timeoutsPerTeam);
     setTimeoutsB(timeoutsPerTeam);
     resetTimer();
   }, [timeoutsPerTeam, resetTimer]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
-    if (team === "A") setScoreA((s) => Math.max(0, s + delta));
-    else setScoreB((s) => Math.max(0, s + delta));
+    if (team === "A") {
+      setScoreA((s) => Math.max(0, s + delta));
+      lastActionA.current = delta;
+    } else {
+      setScoreB((s) => Math.max(0, s + delta));
+      lastActionB.current = delta;
+    }
   }, []);
+
+  const handleUndo = useCallback((team: "A" | "B") => {
+    const last = team === "A" ? lastActionA.current : lastActionB.current;
+    if (last === null) return;
+    if (team === "A") {
+      setScoreA((s) => Math.max(0, s - last));
+      lastActionA.current = null;
+    } else {
+      setScoreB((s) => Math.max(0, s - last));
+      lastActionB.current = null;
+    }
+    showUndoToast(`+${last} annulé`);
+  }, [showUndoToast]);
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
@@ -180,8 +216,8 @@ export default function BasketScore() {
       {/* Équipe A */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
-        <TouchableOpacity onPress={() => handleScore("A", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
+        <TouchableOpacity onPress={() => handleUndo("A")} style={styles.undoBtn}>
+          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("A", 2)}>
           <Text style={styles.score}>{scoreA}</Text>
@@ -197,8 +233,8 @@ export default function BasketScore() {
       {/* Équipe B */}
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
-        <TouchableOpacity onPress={() => handleScore("B", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
+        <TouchableOpacity onPress={() => handleUndo("B")} style={styles.undoBtn}>
+          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleScore("B", 2)}>
           <Text style={styles.score}>{scoreB}</Text>
@@ -210,6 +246,13 @@ export default function BasketScore() {
           <TouchableOpacity onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>
         </View>
       </View>
+
+      {/* Toast undo */}
+      {undoToast && (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastText}>{undoToast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -229,4 +272,15 @@ const styles = StyleSheet.create({
   btn: { fontSize: 18, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
   switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
   switchText: { color: "#fff", textAlign: "center" },
+  undoBtn: { padding: 4, opacity: 0.7 },
+  toast: {
+    position: "absolute",
+    bottom: 60,
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  toastText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 });
