@@ -77,3 +77,22 @@ describe("Cricket starting batting team", () => {
     expect(battingTeam).toBe("B");
   });
 });
+
+const handleCorrectionRun = (runs: number) => Math.max(0, runs - 1);
+const handleCorrectionWicket = (wickets: number) => Math.max(0, wickets - 1);
+const handleCorrectionOver = (overs: number) => Math.max(0, overs - 1);
+
+describe("Cricket score corrections", () => {
+  it("correction run: 15 → 14", () => expect(handleCorrectionRun(15)).toBe(14));
+  it("correction run cannot go below 0", () => expect(handleCorrectionRun(0)).toBe(0));
+  it("correction wicket: 3 → 2", () => expect(handleCorrectionWicket(3)).toBe(2));
+  it("correction wicket cannot go below 0", () => expect(handleCorrectionWicket(0)).toBe(0));
+  it("correction over: 5 → 4", () => expect(handleCorrectionOver(5)).toBe(4));
+  it("correction over cannot go below 0", () => expect(handleCorrectionOver(0)).toBe(0));
+  it("sequence: +6 then correction → 5", () => {
+    let runs = 0;
+    runs = handleRun(runs, 6);
+    runs = handleCorrectionRun(runs);
+    expect(runs).toBe(5);
+  });
+});
