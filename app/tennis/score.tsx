@@ -56,15 +56,15 @@ export default function TennisScore() {
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
   const scoreOrder = [0, 15, 30, 40];
-  const persist = usePersistedScore<TennisSave>("tennis");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<TennisSave>("tennis");
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak });
-  }, [scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak });
+  }, [scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setGamesA(data.gamesA); setGamesB(data.gamesB);
@@ -72,7 +72,7 @@ export default function TennisScore() {
     setSetsHistory(data.setsHistory);
     setTeamA(data.teamA); setTeamB(data.teamB);
     setIsTieBreak(data.isTieBreak);
-  }, [persist]);
+  }, [resumeSave]);
 
   const resetMatch = useCallback(() => {
     setScoreA(0);
@@ -108,11 +108,10 @@ export default function TennisScore() {
   const handlePoint = (team: "A" | "B") => {
     setPrevSnapshot({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, isTieBreak, matchWinner });
     if (isTieBreak) {
-      if (team === "A") setScoreA((prev) => (Number(prev) + 1) as TennisScore);
-      else setScoreB((prev) => (Number(prev) + 1) as TennisScore);
-
       const a = team === "A" ? Number(scoreA) + 1 : Number(scoreA);
       const b = team === "B" ? Number(scoreB) + 1 : Number(scoreB);
+      setScoreA(a as TennisScore);
+      setScoreB(b as TennisScore);
 
       if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
         setIsTieBreak(false);
@@ -219,9 +218,9 @@ export default function TennisScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL paramètres */}
@@ -242,7 +241,7 @@ export default function TennisScore() {
         <TextInput
           placeholder="Nombre de sets gagnants"
           value={String(setsToWin)}
-          onChangeText={(text) => setSetsToWin(Number(text))}
+          onChangeText={(text) => { const v = parseInt(text, 10); if (!isNaN(v) && v > 0) setSetsToWin(v); }}
           keyboardType="numeric"
           style={styles.input}
         />
@@ -250,7 +249,7 @@ export default function TennisScore() {
         <TextInput
           placeholder="Jeux pour gagner un set"
           value={String(gamesToWinSet)}
-          onChangeText={(text) => setGamesToWinSet(Number(text))}
+          onChangeText={(text) => { const v = parseInt(text, 10); if (!isNaN(v) && v > 0) setGamesToWinSet(v); }}
           keyboardType="numeric"
           style={styles.input}
         />
@@ -401,8 +400,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   input: {
-    color: "#333",
-    backgroundColor: "#fff",
+    color: "#fff",
+    backgroundColor: "#333",
     padding: 10,
     borderRadius: 6,
     marginBottom: 10,

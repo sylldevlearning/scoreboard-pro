@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -30,18 +30,21 @@ export default function HockeyScore() {
   const [periodDuration, setPeriodDuration] = useState(20);
   const [currentPeriod, setCurrentPeriod] = useState<Period>(1);
   const [yellowPenaltyMinutes, setYellowPenaltyMinutes] = useState(5);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<HockeySave>("hockey");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<HockeySave>("hockey");
 
   const playBuzz = useCallback(async () => {
-    const { sound: s } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(s);
-    await s.playAsync();
+    try {
+      await soundRef.current?.unloadAsync();
+      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      if (__DEV__) console.warn("Buzzer error:", e);
+    }
   }, []);
 
   const {
@@ -62,20 +65,20 @@ export default function HockeyScore() {
   const { cards, addCard, resetCards, getActivePenalties } = useCardManager(isRunning);
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, teamA, teamB });
-  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setTeamA(data.teamA); setTeamB(data.teamB);
-  }, [persist]);
+  }, [resumeSave]);
 
   useEffect(() => {
-    return () => { sound?.unloadAsync(); };
-  }, [sound]);
+    return () => { soundRef.current?.unloadAsync(); };
+  }, []);
 
   const resetScores = useCallback(() => {
     setScoreA(0);
@@ -120,9 +123,9 @@ export default function HockeyScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL */}

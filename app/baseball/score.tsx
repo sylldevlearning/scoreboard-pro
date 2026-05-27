@@ -24,20 +24,20 @@ export default function BaseballScore() {
   const [showModal, setShowModal] = useState(false);
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<BaseballSave>("baseball");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<BaseballSave>("baseball");
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ teamA, teamB, scoresA, scoresB });
-  }, [teamA, teamB, scoresA, scoresB, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ teamA, teamB, scoresA, scoresB });
+  }, [teamA, teamB, scoresA, scoresB, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setTeamA(data.teamA); setTeamB(data.teamB);
     setScoresA(data.scoresA); setScoresB(data.scoresB);
     setInnings(data.scoresA.length);
-  }, [persist]);
+  }, [resumeSave]);
 
   useEffect(() => {
     setScoresA(Array(innings).fill(0));
@@ -60,9 +60,9 @@ export default function BaseballScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL */}

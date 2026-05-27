@@ -38,21 +38,21 @@ export default function CricketScore() {
   const [showModal, setShowModal] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
 
-  const persist = usePersistedScore<CricketSave>("cricket");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<CricketSave>("cricket");
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam });
-  }, [teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam });
+  }, [teamA, teamB, runsA, wicketsA, oversA, runsB, wicketsB, oversB, currentInning, battingTeam, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setTeamA(data.teamA); setTeamB(data.teamB);
     setRunsA(data.runsA); setWicketsA(data.wicketsA); setOversA(data.oversA);
     setRunsB(data.runsB); setWicketsB(data.wicketsB); setOversB(data.oversB);
     setCurrentInning(data.currentInning); setBattingTeam(data.battingTeam);
-  }, [persist]);
+  }, [resumeSave]);
 
   const handleRun = useCallback((team: "A" | "B", run: number) => {
     if (team === "A") setRunsA((r) => r + run);
@@ -109,9 +109,9 @@ export default function CricketScore() {
   return (
     <View style={styles.container}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* Burger */}
@@ -180,7 +180,7 @@ export default function CricketScore() {
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamA}</Text>
         <Text style={styles.score}>🏏 {runsA}/{wicketsA} ({oversA})</Text>
-        {battingTeam === "A" && currentInning === 1 && (
+        {battingTeam === "A" && (
           <>
             <View style={styles.controls}>
               <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
@@ -213,7 +213,7 @@ export default function CricketScore() {
       <View style={styles.teamBox}>
         <Text style={styles.teamName}>{teamB}</Text>
         <Text style={styles.score}>🏏 {runsB}/{wicketsB} ({oversB})</Text>
-        {battingTeam === "B" && currentInning === 2 && (
+        {battingTeam === "B" && (
           <>
             <View style={styles.controls}>
               <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>

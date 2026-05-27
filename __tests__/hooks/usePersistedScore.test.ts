@@ -32,11 +32,29 @@ describe("usePersistedScore", () => {
     expect(result.current.savedData).toEqual(saved);
   });
 
-  it("save() calls AsyncStorage.setItem with JSON-serialised data", () => {
+  it("save() calls AsyncStorage.setItem with JSON-serialised data (debounced 400ms)", () => {
+    jest.useFakeTimers();
     const { result } = renderHook(() => usePersistedScore<ScoreData>(MOCK_KEY));
     const data: ScoreData = { scoreA: 2, scoreB: 0 };
     act(() => { result.current.save(data); });
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(400); });
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(MOCK_KEY, JSON.stringify(data));
+    jest.useRealTimers();
+  });
+
+  it("save() debounces: rapid calls result in a single AsyncStorage write", () => {
+    jest.useFakeTimers();
+    const { result } = renderHook(() => usePersistedScore<ScoreData>(MOCK_KEY));
+    act(() => {
+      result.current.save({ scoreA: 1, scoreB: 0 });
+      result.current.save({ scoreA: 2, scoreB: 0 });
+      result.current.save({ scoreA: 3, scoreB: 0 });
+    });
+    act(() => { jest.advanceTimersByTime(400); });
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(MOCK_KEY, JSON.stringify({ scoreA: 3, scoreB: 0 }));
+    jest.useRealTimers();
   });
 
   it("resume() returns saved data and clears hasSavedScore", async () => {

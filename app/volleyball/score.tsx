@@ -51,18 +51,18 @@ export default function VolleyballScore() {
   const [setsB, setSetsB] = useState(0);
   const [setsHistory, setSetsHistory] = useState<string[]>([]);
   const [resultatSets, setResultatSets] = useState<string[]>([]);
-  const [hasSwitchedAt8, setHasSwitchedAt8] = useState(false);
   const [nbSetsToWin, setNbSetsToWin] = useState(3);
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
 
-  const persist = usePersistedScore<VolleyballSave>("volleyball");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<VolleyballSave>("volleyball");
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   // Cleanup timeout interval on unmount to prevent leaks
   useEffect(() => {
     return () => {
       if (timerInterval.current) clearInterval(timerInterval.current);
+      soundRef.current?.unloadAsync();
     };
   }, []);
   const { cards, addCard, resetCards } = useCardManager();
@@ -70,30 +70,29 @@ export default function VolleyballScore() {
   const isPortrait = height > width;
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory });
-  }, [scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory });
+  }, [scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setSetsA(data.setsA); setSetsB(data.setsB);
     setTimeoutsA(data.timeoutsA); setTimeoutsB(data.timeoutsB);
     setTeamA(data.teamA); setTeamB(data.teamB);
     setSetsHistory(data.setsHistory);
-  }, [persist]);
-
-  useEffect(() => {
-    return () => { sound?.unloadAsync(); };
-  }, [sound]);
+  }, [resumeSave]);
 
   const playBuzz = useCallback(async () => {
-    const { sound: s } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(s);
-    await s.playAsync();
+    try {
+      await soundRef.current?.unloadAsync();
+      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      if (__DEV__) console.warn("Buzzer error:", e);
+    }
   }, []);
 
   const startTimeout = useCallback((team: "A" | "B") => {
@@ -131,7 +130,6 @@ export default function VolleyballScore() {
     setSetsA(0);
     setSetsB(0);
     setSetsHistory([]);
-    setHasSwitchedAt8(false);
     resetCards();
   }, [startScore, resetCards]);
 
@@ -169,18 +167,9 @@ export default function VolleyballScore() {
       setScoreB(startScore);
       setTimeoutsA(2);
       setTimeoutsB(2);
-      setHasSwitchedAt8(false);
     }
 
-    if (isLastSet && tieBreakEnabled) {
-      const wasUnder8 = (team === "A" ? scoreA : scoreB) < 8;
-      const isNow8 = (team === "A" ? newScoreA : newScoreB) === 8;
-      if (wasUnder8 && isNow8 && !hasSwitchedAt8) {
-        playBuzz();
-        setHasSwitchedAt8(true);
-      }
-    }
-  }, [scoreA, scoreB, setsA, setsB, tieBreakEnabled, nbSetsToWin, teamA, teamB, startScore, hasSwitchedAt8, playBuzz]);
+  }, [scoreA, scoreB, setsA, setsB, tieBreakEnabled, nbSetsToWin, teamA, teamB, startScore, playBuzz]);
 
   const handleAddCard = useCallback((team: "A" | "B", cardType: string) => {
     addCard(team, cardType);
@@ -192,9 +181,9 @@ export default function VolleyballScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL paramètres */}

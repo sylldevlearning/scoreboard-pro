@@ -129,7 +129,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: "100%",
     padding: 12,
-    backgroundColor: "linear-gradient(rgba(0,0,0,0) 30%, rgba(0,0,0,0.7) 100%)",
   },
 
   label: {

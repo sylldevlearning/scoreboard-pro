@@ -30,7 +30,7 @@ export default function BasketScore() {
   const [isTimeout, setIsTimeout] = useState(false);
   const [timeoutTimer, setTimeoutTimer] = useState(30);
   const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   // Undo: last scored action per team
   const lastActionA = useRef<number | null>(null);
@@ -42,12 +42,13 @@ export default function BasketScore() {
     return () => {
       if (timeoutIntervalRef.current) clearInterval(timeoutIntervalRef.current);
       if (undoToastRef.current) clearTimeout(undoToastRef.current);
+      soundRef.current?.unloadAsync();
     };
   }, []);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<BasketballSave>("basketball");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<BasketballSave>("basketball");
 
   const showUndoToast = useCallback((msg: string) => {
     if (undoToastRef.current) clearTimeout(undoToastRef.current);
@@ -59,31 +60,30 @@ export default function BasketScore() {
   }, []);
 
   const playBuzz = useCallback(async () => {
-    const { sound: s } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(s);
-    await s.playAsync();
+    try {
+      await soundRef.current?.unloadAsync();
+      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      if (__DEV__) console.warn("Buzzer error:", e);
+    }
   }, []);
 
   const { timeLeft, isRunning: isQuarterRunning, start: startQuarterTimer, reset: resetTimer } =
     useGameTimer(playBuzz);
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, teamA, teamB });
-  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setTeamA(data.teamA); setTeamB(data.teamB);
-  }, [persist]);
-
-  useEffect(() => {
-    return () => { sound?.unloadAsync(); };
-  }, [sound]);
+  }, [resumeSave]);
 
   const startTimeout = useCallback((team: "A" | "B") => {
     if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0)) return;
@@ -147,9 +147,9 @@ export default function BasketScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL */}
@@ -160,7 +160,7 @@ export default function BasketScore() {
         <TextInput
           placeholder="Durée quart-temps (min)"
           value={quarterDuration.toString()}
-          onChangeText={(t) => setQuarterDuration(Number(t))}
+          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v > 0) setQuarterDuration(v); }}
           style={styles.input}
           keyboardType="numeric"
         />
@@ -169,10 +169,12 @@ export default function BasketScore() {
           placeholder="Nb temps morts / équipe"
           value={timeoutsPerTeam.toString()}
           onChangeText={(t) => {
-            const val = Number(t);
-            setTimeoutsPerTeam(val);
-            setTimeoutsA(val);
-            setTimeoutsB(val);
+            const val = parseInt(t, 10);
+            if (!isNaN(val) && val >= 0) {
+              setTimeoutsPerTeam(val);
+              setTimeoutsA(val);
+              setTimeoutsB(val);
+            }
           }}
           style={styles.input}
           keyboardType="numeric"

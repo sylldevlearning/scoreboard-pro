@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -34,18 +34,21 @@ export default function FootballScore() {
   const [showModal, setShowModal] = useState(false);
   const [halfDuration, setHalfDuration] = useState(45);
   const [isTraining, setIsTraining] = useState(true);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<FootballSave>("football");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<FootballSave>("football");
 
   const playBuzz = useCallback(async () => {
-    const { sound: s } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(s);
-    await s.playAsync();
+    try {
+      await soundRef.current?.unloadAsync();
+      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      if (__DEV__) console.warn("Buzzer error:", e);
+    }
   }, []);
 
   const { timeLeft, isRunning: isHalfRunning, start: startHalfTimer, reset: resetTimer } =
@@ -54,20 +57,20 @@ export default function FootballScore() {
   const { cards, addCard, getCardCount, resetCards } = useCardManager();
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, teamA, teamB });
-  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setTeamA(data.teamA); setTeamB(data.teamB);
-  }, [persist]);
+  }, [resumeSave]);
 
   useEffect(() => {
-    return () => { sound?.unloadAsync(); };
-  }, [sound]);
+    return () => { soundRef.current?.unloadAsync(); };
+  }, []);
 
   const resetScores = useCallback(() => {
     setScoreA(0);
@@ -92,9 +95,9 @@ export default function FootballScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL */}

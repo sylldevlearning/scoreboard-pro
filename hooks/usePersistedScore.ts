@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type UsePersistedScore<T> = {
@@ -13,6 +13,7 @@ type UsePersistedScore<T> = {
 export function usePersistedScore<T>(key: string): UsePersistedScore<T> {
   const [savedData, setSavedData] = useState<T | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     AsyncStorage.getItem(key).then((raw) => {
@@ -21,9 +22,16 @@ export function usePersistedScore<T>(key: string): UsePersistedScore<T> {
     });
   }, [key]);
 
+  useEffect(() => {
+    return () => { clearTimeout(saveTimeoutRef.current); };
+  }, []);
+
   const save = useCallback(
     (data: T) => {
-      AsyncStorage.setItem(key, JSON.stringify(data));
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        AsyncStorage.setItem(key, JSON.stringify(data));
+      }, 400);
     },
     [key]
   );
@@ -35,6 +43,7 @@ export function usePersistedScore<T>(key: string): UsePersistedScore<T> {
   }, [savedData]);
 
   const clear = useCallback(() => {
+    clearTimeout(saveTimeoutRef.current);
     AsyncStorage.removeItem(key);
     setSavedData(null);
   }, [key]);

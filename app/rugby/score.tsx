@@ -34,7 +34,7 @@ export default function RugbyScore() {
   const [halfDuration, setHalfDuration] = useState(40);
   const [isTraining, setIsTraining] = useState(true);
   const [playersPerTeam, setPlayersPerTeam] = useState(15);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   // Undo: last scored action per team
   const lastActionA = useRef<number | null>(null);
@@ -44,11 +44,12 @@ export default function RugbyScore() {
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const persist = usePersistedScore<RugbySave>("rugby");
+  const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<RugbySave>("rugby");
 
   useEffect(() => {
     return () => {
       if (undoToastRef.current) clearTimeout(undoToastRef.current);
+      soundRef.current?.unloadAsync();
     };
   }, []);
 
@@ -62,11 +63,14 @@ export default function RugbyScore() {
   }, []);
 
   const playBuzz = useCallback(async () => {
-    const { sound: s } = await Audio.Sound.createAsync(
-      require("../../assets/buzzer.mp3")
-    );
-    setSound(s);
-    await s.playAsync();
+    try {
+      await soundRef.current?.unloadAsync();
+      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      if (__DEV__) console.warn("Buzzer error:", e);
+    }
   }, []);
 
   const { timeLeft, isRunning: isHalfRunning, start: startHalfTimer, reset: resetTimer } =
@@ -75,20 +79,16 @@ export default function RugbyScore() {
   const { cards, addCard, resetCards, getPlayersOnField } = useCardManager(isHalfRunning);
 
   useEffect(() => {
-    if (!persist.isLoaded) return;
-    persist.save({ scoreA, scoreB, teamA, teamB });
-  }, [scoreA, scoreB, teamA, teamB, persist.isLoaded]);
+    if (!isLoaded) return;
+    save({ scoreA, scoreB, teamA, teamB });
+  }, [scoreA, scoreB, teamA, teamB, isLoaded, save]);
 
   const handleResume = useCallback(() => {
-    const data = persist.resume();
+    const data = resumeSave();
     if (!data) return;
     setScoreA(data.scoreA); setScoreB(data.scoreB);
     setTeamA(data.teamA); setTeamB(data.teamB);
-  }, [persist]);
-
-  useEffect(() => {
-    return () => { sound?.unloadAsync(); };
-  }, [sound]);
+  }, [resumeSave]);
 
   const resetScores = useCallback(() => {
     setScoreA(0);
@@ -131,9 +131,9 @@ export default function RugbyScore() {
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
-        visible={persist.hasSavedScore}
+        visible={hasSavedScore}
         onResume={handleResume}
-        onDiscard={persist.clear}
+        onDiscard={clearSave}
       />
 
       {/* MODAL */}
@@ -144,7 +144,7 @@ export default function RugbyScore() {
         <TextInput
           placeholder="Durée d'une mi-temps (min)"
           value={halfDuration.toString()}
-          onChangeText={(t) => setHalfDuration(Number(t))}
+          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v > 0) setHalfDuration(v); }}
           style={styles.input}
           keyboardType="numeric"
         />
@@ -154,7 +154,7 @@ export default function RugbyScore() {
         <Text style={styles.inputTitle}>Joueurs par équipe</Text>
         <TextInput
           value={playersPerTeam.toString()}
-          onChangeText={(t) => setPlayersPerTeam(Number(t))}
+          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v > 0) setPlayersPerTeam(v); }}
           style={styles.input}
           keyboardType="numeric"
         />
