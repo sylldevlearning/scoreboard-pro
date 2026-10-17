@@ -5,17 +5,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  useWindowDimensions,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
-
-const HEADER_H = 44;
 
 type BasketballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -41,9 +40,7 @@ export default function BasketScore() {
     };
   }, []);
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
-  const scoreFont = Math.min(120, (height - HEADER_H) * 0.28);
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<BasketballSave>("basketball");
 
   const playBuzz = useCallback(async () => {
@@ -177,38 +174,34 @@ export default function BasketScore() {
       )}
 
       {/* Teams */}
-      <View style={styles.teamsRow}>
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamA}</Text>
-          <TouchableOpacity onPress={() => handleScore("A", -1)}>
-            <MaterialCommunityIcons name="eraser" size={28} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 2)}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
-          </TouchableOpacity>
-          <View style={styles.row}>
-            <TouchableOpacity onPress={() => handleScore("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-            <TouchableOpacity disabled={isTimeout} style={isTimeout && styles.disabled} onPress={() => startTimeout("A")}><Text style={styles.btn}>T ({timeoutsA})</Text></TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamB}</Text>
-          <TouchableOpacity onPress={() => handleScore("B", -1)}>
-            <MaterialCommunityIcons name="eraser" size={28} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 2)}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
-          </TouchableOpacity>
-          <View style={styles.row}>
-            <TouchableOpacity onPress={() => handleScore("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-            <TouchableOpacity disabled={isTimeout} style={isTimeout && styles.disabled} onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>
-          </View>
-        </View>
+      <View style={[styles.teamsRow, isLandscape && styles.teamsRowLandscape]}>
+        {([["A", teamA, scoreA, timeoutsA], ["B", teamB, scoreB, timeoutsB]] as const).map(([team, name, score, timeouts]) => (
+          <TeamPanel
+            key={team}
+            side={team}
+            isLandscape={isLandscape}
+            title={<Text style={styles.teamName} numberOfLines={1}>{name}</Text>}
+            scoreAside={
+              <TouchableOpacity onPress={() => handleScore(team, -1)}>
+                <MaterialCommunityIcons name="eraser" size={28} color="white" />
+              </TouchableOpacity>
+            }
+            score={
+              <TouchableOpacity onPress={() => handleScore(team, 2)}>
+                <Text style={[styles.score, { fontSize: scoreFont }]}>{score}</Text>
+              </TouchableOpacity>
+            }
+            actions={
+              // 4 buttons in a row in portrait, a 2×2 grid in landscape
+              <View style={[styles.row, isLandscape && styles.grid]}>
+                <TouchableOpacity onPress={() => handleScore(team, 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleScore(team, 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleScore(team, 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+                <TouchableOpacity disabled={isTimeout} style={isTimeout && styles.disabled} onPress={() => startTimeout(team)}><Text style={styles.btn}>T ({timeouts})</Text></TouchableOpacity>
+              </View>
+            }
+          />
+        ))}
       </View>
     </View>
   );
@@ -242,10 +235,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 44 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   score: { color: "#fff", fontWeight: "bold" },
   row: { flexDirection: "row", gap: 10 },
+  grid: { flexWrap: "wrap", justifyContent: "center", width: 150 },
   btn: { fontSize: 18, color: "#fff", backgroundColor: "#444", paddingVertical: 13, paddingHorizontal: 10, borderRadius: 8 },
   disabled: { opacity: 0.4 },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },

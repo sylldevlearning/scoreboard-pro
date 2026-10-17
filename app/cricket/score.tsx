@@ -6,13 +6,14 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Pressable,
-  useWindowDimensions,
+  Pressable,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { addWicket, correctWicket, getChaseResult, getFinalResult, nextBattingTeam } from "@/utils/scoring/cricket";
 import { applyScoreDelta } from "@/utils/scoring/common";
 
@@ -43,8 +44,7 @@ export default function CricketScore() {
   const [isMatchOver, setIsMatchOver] = useState(false);
 
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<CricketSave>("cricket");
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -128,8 +128,20 @@ export default function CricketScore() {
     setIsMatchOver(false);
   }, [startingBattingTeam]);
 
+  // Innings info and "end of innings": around the teams in portrait, centre column in landscape.
+  const inningInfo = (
+    <Text style={[styles.info, isLandscape && styles.infoLandscape]}>
+      Inning {currentInning} — Batting : {battingTeam === "A" ? teamA : teamB}
+    </Text>
+  );
+  const endInningButton = (
+    <TouchableOpacity onPress={endInning}>
+      <Text style={styles.btn}>📦 Fin de manche</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+    <View style={[styles.container, isLandscape && styles.containerLandscape, { paddingTop: isPortrait ? 60 : HEADER_H }]}>
       <ResumeModal
         visible={hasSavedScore}
         onResume={handleResume}
@@ -137,7 +149,7 @@ export default function CricketScore() {
       />
 
       {/* Burger */}
-      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
+      <TouchableOpacity style={[styles.burger, isLandscape && styles.burgerLandscape]} onPress={() => setShowModal(true)}>
         <MaterialCommunityIcons name="cricket" size={40} color="white" />
         <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
       </TouchableOpacity>
@@ -193,81 +205,98 @@ export default function CricketScore() {
         </Pressable>
       </Modal>
 
-      {/* Équipe en cours */}
-      <Text style={styles.info}>
-        Inning {currentInning} — Batting : {battingTeam === "A" ? teamA : teamB}
-      </Text>
+      {!isLandscape && inningInfo}
 
-      {/* Équipe A */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamA}</Text>
-        <Text style={styles.score}>🏏 {runsA}/{wicketsA} ({oversA})</Text>
-        {battingTeam === "A" && (
-          <>
-            <View style={styles.controls}>
-              <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleRun("A", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleRun("A", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleWicket("A")}>
-                <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleOver("A")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
-            </View>
-            <View style={styles.corrections}>
-              <TouchableOpacity onPress={() => handleCorrectionRun("A")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>run</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleCorrectionWicket("A")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>wkt</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleCorrectionOver("A")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>over</Text>
-              </TouchableOpacity>
-            </View>
-          </>
+      <View style={isLandscape ? styles.teamsRowLandscape : styles.teamsColumn}>
+        <TeamPanel
+          side="A"
+          isLandscape={isLandscape}
+          title={<Text style={styles.teamName} numberOfLines={1}>{teamA}</Text>}
+          score={
+            isLandscape ? (
+              <Text style={[styles.score, { fontSize: scoreFont * 0.6 }]}>{runsA}/{wicketsA}</Text>
+            ) : (
+              <Text style={styles.score}>🏏 {runsA}/{wicketsA} ({oversA})</Text>
+            )
+          }
+          meta={isLandscape && <Text style={styles.oversLabel}>Overs : {oversA}</Text>}
+          actions={battingTeam === "A" && (
+            <>
+              <View style={[styles.controls, isLandscape && styles.controlsLandscape]}>
+                <TouchableOpacity onPress={() => handleRun("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRun("A", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRun("A", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleWicket("A")}>
+                  <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleOver("A")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
+              </View>
+              <View style={[styles.corrections, isLandscape && styles.controlsLandscape]}>
+                <TouchableOpacity onPress={() => handleCorrectionRun("A")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>run</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleCorrectionWicket("A")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>wkt</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleCorrectionOver("A")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>over</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        />
+        {isLandscape && (
+          <View style={styles.centerCol}>
+            {inningInfo}
+            {endInningButton}
+          </View>
         )}
+        <TeamPanel
+          side="B"
+          isLandscape={isLandscape}
+          title={<Text style={styles.teamName} numberOfLines={1}>{teamB}</Text>}
+          score={
+            isLandscape ? (
+              <Text style={[styles.score, { fontSize: scoreFont * 0.6 }]}>{runsB}/{wicketsB}</Text>
+            ) : (
+              <Text style={styles.score}>🏏 {runsB}/{wicketsB} ({oversB})</Text>
+            )
+          }
+          meta={isLandscape && <Text style={styles.oversLabel}>Overs : {oversB}</Text>}
+          actions={battingTeam === "B" && (
+            <>
+              <View style={[styles.controls, isLandscape && styles.controlsLandscape]}>
+                <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRun("B", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRun("B", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => handleWicket("B")}>
+                  <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleOver("B")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
+              </View>
+              <View style={[styles.corrections, isLandscape && styles.controlsLandscape]}>
+                <TouchableOpacity onPress={() => handleCorrectionRun("B")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>run</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleCorrectionWicket("B")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>wkt</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleCorrectionOver("B")} style={styles.corrBtn}>
+                  <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
+                  <Text style={styles.corrLabel}>over</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        />
       </View>
 
-      {/* Équipe B */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamB}</Text>
-        <Text style={styles.score}>🏏 {runsB}/{wicketsB} ({oversB})</Text>
-        {battingTeam === "B" && (
-          <>
-            <View style={styles.controls}>
-              <TouchableOpacity onPress={() => handleRun("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleRun("B", 4)}><Text style={styles.btn}>+4</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleRun("B", 6)}><Text style={styles.btn}>+6</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => handleWicket("B")}>
-                <MaterialCommunityIcons name="cricket" size={28} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleOver("B")}><Text style={styles.btn}>Over</Text></TouchableOpacity>
-            </View>
-            <View style={styles.corrections}>
-              <TouchableOpacity onPress={() => handleCorrectionRun("B")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>run</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleCorrectionWicket("B")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>wkt</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleCorrectionOver("B")} style={styles.corrBtn}>
-                <MaterialCommunityIcons name="eraser" size={18} color="#aaa" />
-                <Text style={styles.corrLabel}>over</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-
-      {/* Fin de manche */}
-      <TouchableOpacity onPress={endInning}>
-        <Text style={styles.btn}>📦 Fin de manche</Text>
-      </TouchableOpacity>
+      {!isLandscape && endInningButton}
     </View>
   );
 }
@@ -286,9 +315,15 @@ const styles = StyleSheet.create({
     left: "5%",
     zIndex: 10,
   },
-  teamBox: { alignItems: "center", gap: 10 },
+  burgerLandscape: { top: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  containerLandscape: { padding: 12 },
+  teamsColumn: { flex: 1, alignSelf: "stretch", justifyContent: "space-around" },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  teamsRowLandscape: { flex: 1, alignSelf: "stretch", flexDirection: "row", gap: 16, paddingBottom: 44 },
+  centerCol: { justifyContent: "center", alignItems: "center", gap: 16, maxWidth: 200 },
   teamName: { color: "#fff", fontSize: 24, fontWeight: "bold" },
   score: { color: "#fff", fontSize: 28 },
+  oversLabel: { color: "#ccc", fontSize: 16 },
   controls: {
     flexDirection: "row",
     gap: 10,
@@ -296,6 +331,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
   },
+  controlsLandscape: { marginTop: 0, maxWidth: 180 },
   btn: {
     color: "#fff",
     backgroundColor: "#444",
@@ -305,6 +341,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   info: { color: "#ccc", fontSize: 18, marginBottom: 10 },
+  infoLandscape: { marginBottom: 0, textAlign: "center" },
   corrections: {
     flexDirection: "row",
     gap: 8,

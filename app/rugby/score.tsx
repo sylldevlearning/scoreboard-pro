@@ -5,11 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  useWindowDimensions,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import { useCardManager } from "@/hooks/useCardManager";
 import type { CardTypeConfig } from "@/hooks/useCardManager";
@@ -17,14 +17,13 @@ import CardTracker from "@/components/CardTracker";
 import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
 
 const RUGBY_CARDS: CardTypeConfig[] = [
   { type: "yellow", label: "Carton jaune (10 min)", emoji: "🟨", color: "#f1c40f", penaltySeconds: 600 },
   { type: "red", label: "Carton rouge (expulsion)", emoji: "🟥", color: "#e74c3c" },
 ];
-
-const HEADER_H = 44;
 
 type RugbySave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -39,9 +38,7 @@ export default function RugbyScore() {
   const [playersPerTeam, setPlayersPerTeam] = useState(15);
   const buzzer = useAudioPlayer(require("../../assets/buzzer.mp3"));
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
-  const scoreFont = Math.min(120, (height - HEADER_H) * 0.28);
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<RugbySave>("rugby");
 
   const playBuzz = useCallback(async () => {
@@ -136,38 +133,38 @@ export default function RugbyScore() {
       </View>
 
       {/* Teams */}
-      <View style={styles.teamsRow}>
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamA}</Text>
-          <Text style={styles.playerCount}>👤 {getPlayersOnField("A", playersPerTeam)}/{playersPerTeam}</Text>
-          <CardTracker team="A" cards={cards} cardTypes={RUGBY_CARDS} />
-          <TouchableOpacity onPress={() => handleScore("A", -1)}>
-            <MaterialCommunityIcons name="eraser" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
-          <View style={styles.row}>
-            <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("A", 5)}><Text style={styles.btn}>+5</Text></TouchableOpacity>
-          </View>
-          <CardActionButtons team="A" teamName={teamA} cardTypes={RUGBY_CARDS} onAddCard={handleAddCard} />
-        </View>
-
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamB}</Text>
-          <Text style={styles.playerCount}>👤 {getPlayersOnField("B", playersPerTeam)}/{playersPerTeam}</Text>
-          <CardTracker team="B" cards={cards} cardTypes={RUGBY_CARDS} />
-          <TouchableOpacity onPress={() => handleScore("B", -1)}>
-            <MaterialCommunityIcons name="eraser" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
-          <View style={styles.row}>
-            <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => handleScore("B", 5)}><Text style={styles.btn}>+5</Text></TouchableOpacity>
-          </View>
-          <CardActionButtons team="B" teamName={teamB} cardTypes={RUGBY_CARDS} onAddCard={handleAddCard} />
-        </View>
+      <View style={[styles.teamsRow, isLandscape && styles.teamsRowLandscape]}>
+        {([["A", teamA, scoreA], ["B", teamB, scoreB]] as const).map(([team, name, score]) => (
+          <TeamPanel
+            key={team}
+            side={team}
+            isLandscape={isLandscape}
+            title={<Text style={styles.teamName} numberOfLines={1}>{name}</Text>}
+            info={
+              <>
+                <Text style={styles.playerCount}>👤 {getPlayersOnField(team, playersPerTeam)}/{playersPerTeam}</Text>
+                <CardTracker team={team} cards={cards} cardTypes={RUGBY_CARDS} />
+              </>
+            }
+            scoreAside={
+              <TouchableOpacity onPress={() => handleScore(team, -1)}>
+                <MaterialCommunityIcons name="eraser" size={28} color="white" />
+              </TouchableOpacity>
+            }
+            score={<Text style={[styles.score, { fontSize: scoreFont }]}>{score}</Text>}
+            actions={
+              <>
+                {/* buttons in a row in portrait, a 2-column grid in landscape */}
+                <View style={[styles.row, isLandscape && styles.grid]}>
+                  <TouchableOpacity onPress={() => handleScore(team, 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleScore(team, 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleScore(team, 5)}><Text style={styles.btn}>+5</Text></TouchableOpacity>
+                </View>
+                <CardActionButtons team={team} teamName={name} cardTypes={RUGBY_CARDS} onAddCard={handleAddCard} />
+              </>
+            }
+          />
+        ))}
       </View>
     </View>
   );
@@ -199,10 +196,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 8 },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 44 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff" },
   score: { color: "#fff", fontWeight: "bold" },
   row: { flexDirection: "row", gap: 20 },
+  grid: { flexWrap: "wrap", justifyContent: "center", gap: 10, width: 130 },
   btn: { fontSize: 20, color: "#fff", backgroundColor: "#444", paddingVertical: 12, paddingHorizontal: 10, borderRadius: 8 },
   playerCount: { fontSize: 13, color: "#aaa", fontWeight: "600" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },

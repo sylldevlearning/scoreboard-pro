@@ -5,17 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  useWindowDimensions,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import { useCardManager } from "@/hooks/useCardManager";
 import HockeyPenaltyButtons from "@/components/HockeyPenaltyButtons";
 import HockeyPenaltyList from "@/components/HockeyPenaltyList";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
 import {
   canGoNextPeriod as canAdvancePeriod,
@@ -44,9 +45,7 @@ export default function HockeyScore() {
   const [currentPeriod, setCurrentPeriod] = useState<Period>(1);
   const buzzer = useAudioPlayer(require("../../assets/buzzer.mp3"));
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
-  const scoreFont = Math.min(100, height * 0.26);
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const {
     save,
     resume: resumeSave,
@@ -131,8 +130,51 @@ export default function HockeyScore() {
   const strengthA = getStrength(cards, "A");
   const strengthB = getStrength(cards, "B");
 
+  // Period + clock: above the teams in portrait, centre column in landscape.
+  const clock = (
+    <View style={[styles.timerArea, isLandscape && styles.timerAreaLandscape]}>
+      <Text style={styles.periodLabel}>{periodLabel(currentPeriod)}</Text>
+      <Text style={styles.timerDisplay}>
+        {isRunning || timeLeft > 0
+          ? formatTime(timeLeft)
+          : formatTime(periodDuration * 60)}
+      </Text>
+      <View style={styles.timerControls}>
+        {!isRunning ? (
+          <TouchableOpacity
+            style={styles.timerBtn}
+            onPress={() => (timeLeft > 0 ? resume() : start(periodDuration))}
+          >
+            <Text style={styles.timerBtnText}>
+              ▶ {timeLeft > 0 ? "Reprendre" : "Démarrer"}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.timerBtn, styles.timerBtnPause]}
+            onPress={stop}
+          >
+            <Text style={styles.timerBtnText}>⏸ Pause</Text>
+          </TouchableOpacity>
+        )}
+        {canGoNextPeriod && (
+          <TouchableOpacity
+            style={[styles.timerBtn, styles.timerBtnNext]}
+            onPress={nextPeriod}
+          >
+            <Text style={styles.timerBtnText}>
+              {currentPeriod === 3
+                ? "Prolongation ▶"
+                : `Période ${(currentPeriod as number) + 1} ▶`}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
   return (
-    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : HEADER_H }]}>
       <ResumeModal
         visible={hasSavedScore}
         onResume={handleResume}
@@ -170,99 +212,65 @@ export default function HockeyScore() {
 
       {/* Burger — right corner, clear of centered timerArea */}
       <TouchableOpacity
-        style={styles.burger}
+        style={[styles.burger, isLandscape && styles.burgerLandscape]}
         onPress={() => setShowModal(true)}
       >
         <MaterialCommunityIcons name="hockey-sticks" size={26} color="white" />
         <Text style={styles.burgerText}>☰</Text>
       </TouchableOpacity>
 
-      {/* Période + Chrono */}
-      <View style={styles.timerArea}>
-        <Text style={styles.periodLabel}>{periodLabel(currentPeriod)}</Text>
-        <Text style={styles.timerDisplay}>
-          {isRunning || timeLeft > 0
-            ? formatTime(timeLeft)
-            : formatTime(periodDuration * 60)}
-        </Text>
-        <View style={styles.timerControls}>
-          {!isRunning ? (
-            <TouchableOpacity
-              style={styles.timerBtn}
-              onPress={() => (timeLeft > 0 ? resume() : start(periodDuration))}
-            >
-              <Text style={styles.timerBtnText}>
-                ▶ {timeLeft > 0 ? "Reprendre" : "Démarrer"}
-              </Text>
+      {!isLandscape && clock}
+      <View style={[styles.teamsRow, isLandscape && styles.teamsRowLandscape]}>
+        <TeamPanel
+          key="A"
+          side="A"
+          isLandscape={isLandscape}
+          title={<Text style={styles.teamName} numberOfLines={1}>{teamA}</Text>}
+          info={
+            <>
+              <Text style={styles.playersOnIce}>🏒 {playersOnIce("A")} joueurs</Text>
+              {strengthA === "superiority" && <Text style={styles.superiority}>⬆ Supériorité</Text>}
+              {strengthA === "inferiority" && <Text style={styles.inferiority}>⬇ Infériorité</Text>}
+              <HockeyPenaltyList team="A" cards={cards} />
+            </>
+          }
+          scoreAside={
+            <TouchableOpacity onPress={() => handleScore("A", -1)}>
+              <MaterialCommunityIcons name="eraser" size={32} color="white" />
             </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.timerBtn, styles.timerBtnPause]}
-              onPress={stop}
-            >
-              <Text style={styles.timerBtnText}>⏸ Pause</Text>
+          }
+          score={
+            <TouchableOpacity onPress={() => handleScore("A", 1)}>
+              <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
             </TouchableOpacity>
-          )}
-          {canGoNextPeriod && (
-            <TouchableOpacity
-              style={[styles.timerBtn, styles.timerBtnNext]}
-              onPress={nextPeriod}
-            >
-              <Text style={styles.timerBtnText}>
-                {currentPeriod === 3
-                  ? "Prolongation ▶"
-                  : `Période ${(currentPeriod as number) + 1} ▶`}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Équipe A */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamA}</Text>
-        <Text style={styles.playersOnIce}>🏒 {playersOnIce("A")} joueurs</Text>
-        {strengthA === "superiority" && (
-          <Text style={styles.superiority}>⬆ Supériorité</Text>
-        )}
-        {strengthA === "inferiority" && (
-          <Text style={styles.inferiority}>⬇ Infériorité</Text>
-        )}
-        <HockeyPenaltyList team="A" cards={cards} />
-        <TouchableOpacity onPress={() => handleScore("A", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleScore("A", 1)}>
-          <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
-        </TouchableOpacity>
-        <HockeyPenaltyButtons
-          team="A"
-          teamName={teamA}
-          onAddPenalty={handleAddPenalty}
+          }
+          actions={<HockeyPenaltyButtons team="A" teamName={teamA} onAddPenalty={handleAddPenalty} />}
         />
-      </View>
-
-      {/* Équipe B */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamB}</Text>
-        <Text style={styles.playersOnIce}>🏒 {playersOnIce("B")} joueurs</Text>
-        {strengthB === "superiority" && (
-          <Text style={styles.superiority}>⬆ Supériorité</Text>
-        )}
-        {strengthB === "inferiority" && (
-          <Text style={styles.inferiority}>⬇ Infériorité</Text>
-        )}
-        <HockeyPenaltyList team="B" cards={cards} />
-        <TouchableOpacity onPress={() => handleScore("B", -1)}>
-          <MaterialCommunityIcons name="eraser" size={32} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleScore("B", 1)}>
-          <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
-        </TouchableOpacity>
-        <HockeyPenaltyButtons
-          team="B"
-          teamName={teamB}
-          onAddPenalty={handleAddPenalty}
+        {isLandscape && clock}
+        <TeamPanel
+          key="B"
+          side="B"
+          isLandscape={isLandscape}
+          title={<Text style={styles.teamName} numberOfLines={1}>{teamB}</Text>}
+          info={
+            <>
+              <Text style={styles.playersOnIce}>🏒 {playersOnIce("B")} joueurs</Text>
+              {strengthB === "superiority" && <Text style={styles.superiority}>⬆ Supériorité</Text>}
+              {strengthB === "inferiority" && <Text style={styles.inferiority}>⬇ Infériorité</Text>}
+              <HockeyPenaltyList team="B" cards={cards} />
+            </>
+          }
+          scoreAside={
+            <TouchableOpacity onPress={() => handleScore("B", -1)}>
+              <MaterialCommunityIcons name="eraser" size={32} color="white" />
+            </TouchableOpacity>
+          }
+          score={
+            <TouchableOpacity onPress={() => handleScore("B", 1)}>
+              <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
+            </TouchableOpacity>
+          }
+          actions={<HockeyPenaltyButtons team="B" teamName={teamB} onAddPenalty={handleAddPenalty} />}
         />
       </View>
     </View>
@@ -273,30 +281,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+    padding: 10,
+  },
+  teamsRow: {
+    flex: 1,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    padding: 10,
   },
-  teamBox: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flex: 1,
-    gap: 8,
-  },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  teamsRowLandscape: { alignItems: "stretch", gap: 16, paddingBottom: 44 },
   teamName: { fontSize: 22, fontWeight: "bold", color: "#fff" },
   playersOnIce: { fontSize: 13, color: "#aaa" },
   score: { color: "#fff", fontWeight: "bold" },
   burger: { position: "absolute", top: 30, right: "3%", zIndex: 10, flexDirection: "row", alignItems: "center", gap: 4 },
+  burgerLandscape: { top: 4 },
   burgerText: { fontSize: 26, color: "white" },
-  timerArea: {
-    position: "absolute",
-    top: 30,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 5,
-  },
+  timerArea: { alignItems: "center", marginBottom: 8 },
+  timerAreaLandscape: { justifyContent: "center", marginBottom: 0, maxWidth: 220 },
   periodLabel: {
     color: "#aaa",
     fontSize: 14,
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginVertical: 4,
   },
-  timerControls: { flexDirection: "row", gap: 8 },
+  timerControls: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
   timerBtn: {
     backgroundColor: "#1a7a3a",
     paddingHorizontal: 14,

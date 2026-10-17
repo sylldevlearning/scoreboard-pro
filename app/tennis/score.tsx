@@ -6,14 +6,15 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Pressable,
-  useWindowDimensions,
+  Pressable,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import {
   applyPoint,
   eraseLastPoint,
@@ -50,9 +51,7 @@ export default function TennisScore() {
   const [matchWinner, setMatchWinner] = useState<"A" | "B" | null>(null);
   const [snapshotStack, setSnapshotStack] = useState<SnapshotEntry[]>([]);
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
-  const scoreFont = Math.min(120, height * 0.28);
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<TennisSave>("tennis");
 
   useEffect(() => {
@@ -114,6 +113,21 @@ export default function TennisScore() {
   const pad = (text: string, length: number) =>
     text + " ".repeat(Math.max(0, length - text.length));
 
+  // Set scores: under the players in portrait, between them in landscape.
+  const nameWidth = Math.max(teamA.length, teamB.length);
+  const history = (
+    <View style={[styles.historyBox, isLandscape && styles.historyBoxLandscape]}>
+      <Text style={styles.historyRow}>
+        {pad(teamA, nameWidth)} :{" "}
+        {setsHistory.map((s) => s[0]).join("   ")}
+      </Text>
+      <Text style={styles.historyRow}>
+        {pad(teamB, nameWidth)} :{" "}
+        {setsHistory.map((s) => s[1]).join("   ")}
+      </Text>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal visible={hasSavedScore} onResume={handleResume} onDiscard={clearSave} />
@@ -166,42 +180,43 @@ export default function TennisScore() {
         <Text style={styles.burgerText}>☰</Text>
       </TouchableOpacity>
 
-      <View style={styles.scoresWrapper}>
-        {/* Joueur A */}
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamA}</Text>
-          <TouchableOpacity onPress={() => handlePoint("A")} style={styles.scoreContainer}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
-          </TouchableOpacity>
-          <Text style={styles.sets}>Jeux : {gamesA}</Text>
-          <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("A")}>
-            <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Joueur B */}
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamB}</Text>
-          <TouchableOpacity onPress={() => handlePoint("B")} style={styles.scoreContainer}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
-          </TouchableOpacity>
-          <Text style={styles.sets}>Jeux : {gamesB}</Text>
-          <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("B")}>
-            <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.scoresWrapper, isLandscape && styles.scoresWrapperLandscape]}>
+        <TeamPanel
+          side="A"
+          isLandscape={isLandscape}
+          title={<Text style={[styles.teamName, isLandscape && styles.teamNameLandscape]} numberOfLines={1}>{teamA}</Text>}
+          score={
+            <TouchableOpacity onPress={() => handlePoint("A")} style={!isLandscape && styles.scoreContainer}>
+              <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
+            </TouchableOpacity>
+          }
+          meta={<Text style={[styles.sets, isLandscape && styles.setsLandscape]}>Jeux : {gamesA}</Text>}
+          actions={
+            <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("A")}>
+              <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
+            </TouchableOpacity>
+          }
+        />
+        {isLandscape && history}
+        <TeamPanel
+          side="B"
+          isLandscape={isLandscape}
+          title={<Text style={[styles.teamName, isLandscape && styles.teamNameLandscape]} numberOfLines={1}>{teamB}</Text>}
+          score={
+            <TouchableOpacity onPress={() => handlePoint("B")} style={!isLandscape && styles.scoreContainer}>
+              <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
+            </TouchableOpacity>
+          }
+          meta={<Text style={[styles.sets, isLandscape && styles.setsLandscape]}>Jeux : {gamesB}</Text>}
+          actions={
+            <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("B")}>
+              <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
+            </TouchableOpacity>
+          }
+        />
       </View>
 
-      <View style={styles.historyBox}>
-        <Text style={styles.historyRow}>
-          {pad(teamA, Math.max(teamA.length, teamB.length))} :{" "}
-          {setsHistory.map((s) => s[0]).join("   ")}
-        </Text>
-        <Text style={styles.historyRow}>
-          {pad(teamB, Math.max(teamA.length, teamB.length))} :{" "}
-          {setsHistory.map((s) => s[1]).join("   ")}
-        </Text>
-      </View>
+      {!isLandscape && history}
     </View>
   );
 }
@@ -219,16 +234,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  teamBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    paddingVertical: 20,
-  },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  scoresWrapperLandscape: { alignItems: "stretch", gap: 16, marginTop: 40, paddingBottom: 44 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
+  teamNameLandscape: { marginBottom: 0 },
   scoreContainer: { justifyContent: "center", alignItems: "center", marginVertical: 20 },
   score: { color: "#fff", fontWeight: "bold" },
   sets: { fontSize: 20, color: "#fff", marginTop: 10 },
+  setsLandscape: { marginTop: 0 },
   eraseBtn: {
     marginTop: 12,
     padding: 8,
@@ -256,6 +269,7 @@ const styles = StyleSheet.create({
   inputTitle: { fontSize: 18, color: "#fff", marginBottom: 2, marginTop: 2, textAlign: "center" },
   input: { color: "#fff", backgroundColor: "#333", padding: 10, borderRadius: 6, marginBottom: 10 },
   historyBox: { paddingBottom: 10, paddingHorizontal: 20 },
+  historyBoxLandscape: { alignSelf: "center", paddingBottom: 0, paddingHorizontal: 0 },
   historyRow: { color: "#fff", fontSize: 16, marginVertical: 2, fontFamily: "monospace" },
   winOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
   winBox: { backgroundColor: "#222", padding: 30, borderRadius: 16, width: "80%", alignItems: "center" },

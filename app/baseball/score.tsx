@@ -5,13 +5,14 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  useWindowDimensions,
+  ScrollView,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { applyInningScore, emptyInnings, parseInningsInput, totalRuns } from "@/utils/scoring/baseball";
 
 type BaseballSave = { teamA: string; teamB: string; scoresA: number[]; scoresB: number[] };
@@ -24,8 +25,7 @@ export default function BaseballScore() {
   const [scoresA, setScoresA] = useState<number[]>(emptyInnings(6));
   const [scoresB, setScoresB] = useState<number[]>(emptyInnings(6));
   const [showModal, setShowModal] = useState(false);
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<BaseballSave>("baseball");
 
   useEffect(() => {
@@ -65,6 +65,15 @@ export default function BaseballScore() {
 
   const total = totalRuns;
 
+  // Landscape: the table stretches to the screen width (it still scrolls when
+  // there are too many innings to fit).
+  const nameW = isLandscape ? 120 : 60;
+  const cellW = isLandscape
+    ? Math.max(48, Math.min(96, (width - 40 - nameW) / (innings + 1)))
+    : 60;
+  const nameCell = [styles.cell, { width: nameW }];
+  const cell = [styles.cell, { width: cellW }];
+
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
@@ -102,14 +111,14 @@ export default function BaseballScore() {
         <Text style={styles.burgerIcon}>☰</Text>
       </TouchableOpacity>
 
-      <ScrollView horizontal style={{ marginTop: isPortrait ? 70 : 55 }}>
+      <ScrollView horizontal style={{ marginTop: isPortrait ? 70 : 50 }} contentContainerStyle={isLandscape && styles.tableLandscape}>
         <View>
           <View style={styles.row}>
-            <Text style={styles.cell}></Text>
+            <Text style={nameCell}></Text>
             {Array.from({ length: innings }).map((_, i) => (
-              <Text key={i} style={styles.cell}>{i + 1}</Text>
+              <Text key={i} style={cell}>{i + 1}</Text>
             ))}
-            <Text style={styles.cell}>Total</Text>
+            <Text style={cell}>Total</Text>
           </View>
 
           {[
@@ -117,9 +126,9 @@ export default function BaseballScore() {
             { team: teamB, scores: scoresB, id: "B" },
           ].map(({ team, scores, id }) => (
             <View key={id} style={styles.row}>
-              <Text style={styles.cell}>{team}</Text>
+              <Text style={nameCell} numberOfLines={1}>{team}</Text>
               {scores.map((score, i) => (
-                <View key={i} style={styles.scoreCell}>
+                <View key={i} style={[styles.scoreCell, { width: cellW }]}>
                   <TouchableOpacity onPress={() => handleScoreChange(id as "A" | "B", i, -1)}>
                     <Text style={styles.control}>−</Text>
                   </TouchableOpacity>
@@ -129,7 +138,7 @@ export default function BaseballScore() {
                   </TouchableOpacity>
                 </View>
               ))}
-              <Text style={styles.cell}>{total(scores)}</Text>
+              <Text style={[cell, styles.total]}>{total(scores)}</Text>
             </View>
           ))}
         </View>
@@ -164,6 +173,8 @@ const styles = StyleSheet.create({
     padding: 8,
     fontWeight: "bold",
   },
+  total: { fontSize: 22 },
+  tableLandscape: { flexGrow: 1, justifyContent: "center" },
   scoreCell: {
     width: 60,
     alignItems: "center",

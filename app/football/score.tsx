@@ -5,12 +5,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  useWindowDimensions,
 } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
+import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import { useCardManager } from "@/hooks/useCardManager";
 import type { CardTypeConfig } from "@/hooks/useCardManager";
@@ -18,6 +18,7 @@ import CardTracker from "@/components/CardTracker";
 import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
 import { shouldAddAutoRed } from "@/utils/scoring/football";
 
@@ -25,8 +26,6 @@ const FOOTBALL_CARDS: CardTypeConfig[] = [
   { type: "yellow", label: "Carton jaune", emoji: "🟨", color: "#f1c40f" },
   { type: "red", label: "Carton rouge (expulsion)", emoji: "🟥", color: "#e74c3c" },
 ];
-
-const HEADER_H = 44;
 
 type FootballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -40,9 +39,7 @@ export default function FootballScore() {
   const [isTraining, setIsTraining] = useState(true);
   const buzzer = useAudioPlayer(require("../../assets/buzzer.mp3"));
 
-  const { width, height } = useWindowDimensions();
-  const isPortrait = height > width;
-  const scoreFont = Math.min(120, (height - HEADER_H) * 0.28);
+  const { width, isPortrait, isLandscape, scoreFont } = useScoreLayout();
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<FootballSave>("football");
 
   const playBuzz = useCallback(async () => {
@@ -133,30 +130,27 @@ export default function FootballScore() {
       </View>
 
       {/* Teams */}
-      <View style={styles.teamsRow}>
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamA}</Text>
-          <CardTracker team="A" cards={cards} cardTypes={FOOTBALL_CARDS} />
-          <TouchableOpacity onPress={() => handleScore("A", -1)}>
-            <MaterialCommunityIcons name="eraser" size={32} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 1)}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
-          </TouchableOpacity>
-          <CardActionButtons team="A" teamName={teamA} cardTypes={FOOTBALL_CARDS} onAddCard={handleAddCard} />
-        </View>
-
-        <View style={styles.teamBox}>
-          <Text style={styles.teamName}>{teamB}</Text>
-          <CardTracker team="B" cards={cards} cardTypes={FOOTBALL_CARDS} />
-          <TouchableOpacity onPress={() => handleScore("B", -1)}>
-            <MaterialCommunityIcons name="eraser" size={32} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 1)}>
-            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
-          </TouchableOpacity>
-          <CardActionButtons team="B" teamName={teamB} cardTypes={FOOTBALL_CARDS} onAddCard={handleAddCard} />
-        </View>
+      <View style={[styles.teamsRow, isLandscape && styles.teamsRowLandscape]}>
+        {([["A", teamA, scoreA], ["B", teamB, scoreB]] as const).map(([team, name, score]) => (
+          <TeamPanel
+            key={team}
+            side={team}
+            isLandscape={isLandscape}
+            title={<Text style={styles.teamName} numberOfLines={1}>{name}</Text>}
+            info={<CardTracker team={team} cards={cards} cardTypes={FOOTBALL_CARDS} />}
+            scoreAside={
+              <TouchableOpacity onPress={() => handleScore(team, -1)}>
+                <MaterialCommunityIcons name="eraser" size={32} color="white" />
+              </TouchableOpacity>
+            }
+            score={
+              <TouchableOpacity onPress={() => handleScore(team, 1)}>
+                <Text style={[styles.score, { fontSize: scoreFont }]}>{score}</Text>
+              </TouchableOpacity>
+            }
+            actions={<CardActionButtons team={team} teamName={name} cardTypes={FOOTBALL_CARDS} onAddCard={handleAddCard} />}
+          />
+        ))}
       </View>
     </View>
   );
@@ -188,12 +182,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  teamBox: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flex: 1,
-    gap: 8,
-  },
+  // Leaves room at the bottom for the rotation button of the root layout.
+  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 44 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff" },
   score: { color: "#fff", fontWeight: "bold" },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
