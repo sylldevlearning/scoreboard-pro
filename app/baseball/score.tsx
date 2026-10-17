@@ -12,15 +12,17 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import { applyInningScore, emptyInnings, parseInningsInput, totalRuns } from "@/utils/scoring/baseball";
 
 type BaseballSave = { teamA: string; teamB: string; scoresA: number[]; scoresB: number[] };
 
 export default function BaseballScore() {
   const [innings, setInnings] = useState(6);
+  const [inningsInput, setInningsInput] = useState("6");
   const [teamA, setTeamA] = useState("Équipe A");
   const [teamB, setTeamB] = useState("Équipe B");
-  const [scoresA, setScoresA] = useState<number[]>(Array(9).fill(0));
-  const [scoresB, setScoresB] = useState<number[]>(Array(9).fill(0));
+  const [scoresA, setScoresA] = useState<number[]>(emptyInnings(6));
+  const [scoresB, setScoresB] = useState<number[]>(emptyInnings(6));
   const [showModal, setShowModal] = useState(false);
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
@@ -37,25 +39,31 @@ export default function BaseballScore() {
     setTeamA(data.teamA); setTeamB(data.teamB);
     setScoresA(data.scoresA); setScoresB(data.scoresB);
     setInnings(data.scoresA.length);
+    setInningsInput(String(data.scoresA.length));
   }, [resumeSave]);
 
-  useEffect(() => {
-    setScoresA(Array(innings).fill(0));
-    setScoresB(Array(innings).fill(0));
-  }, [innings]);
+  // Only a change made from the settings resets the board; restoring a game
+  // sets innings directly and keeps its scores.
+  const handleInningsChange = (text: string) => {
+    setInningsInput(text);
+    const n = parseInningsInput(text);
+    if (n === null || n === innings) return;
+    setInnings(n);
+    setScoresA(emptyInnings(n));
+    setScoresB(emptyInnings(n));
+  };
 
   const handleScoreChange = (team: "A" | "B", inning: number, delta: number) => {
-    const scores = team === "A" ? [...scoresA] : [...scoresB];
-    scores[inning] = Math.max(0, scores[inning] + delta);
-    team === "A" ? setScoresA(scores) : setScoresB(scores);
+    if (team === "A") setScoresA((s) => applyInningScore(s, inning, delta));
+    else setScoresB((s) => applyInningScore(s, inning, delta));
   };
 
   const reset = useCallback(() => {
-    setScoresA(Array(innings).fill(0));
-    setScoresB(Array(innings).fill(0));
+    setScoresA(emptyInnings(innings));
+    setScoresB(emptyInnings(innings));
   }, [innings]);
 
-  const total = (scores: number[]) => scores.reduce((a, b) => a + b, 0);
+  const total = totalRuns;
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
@@ -83,8 +91,8 @@ export default function BaseballScore() {
         <TextInput
           placeholder="Nombre de manches"
           keyboardType="numeric"
-          value={innings.toString()}
-          onChangeText={(t) => setInnings(Math.max(1, Number(t)))}
+          value={inningsInput}
+          onChangeText={handleInningsChange}
           style={styles.input}
         />
       </SettingsModal>
@@ -94,7 +102,7 @@ export default function BaseballScore() {
         <Text style={styles.burgerIcon}>☰</Text>
       </TouchableOpacity>
 
-      <ScrollView horizontal style={{ marginTop: 80 }}>
+      <ScrollView horizontal style={{ marginTop: isPortrait ? 70 : 55 }}>
         <View>
           <View style={styles.row}>
             <Text style={styles.cell}></Text>

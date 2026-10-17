@@ -1,98 +1,79 @@
-// Cricket scoring logic extracted from app/cricket/score.tsx
-
-function handleWicket(wickets: number): number {
-  return wickets < 10 ? wickets + 1 : wickets;
-}
-
-function handleRun(runs: number, run: number): number {
-  return runs + run;
-}
-
-function endInning(
-  currentInning: 1 | 2,
-  battingTeam: "A" | "B",
-  runsA: number,
-  runsB: number,
-  teamA: string,
-  teamB: string
-): { nextInning?: 1 | 2; nextBattingTeam?: "A" | "B"; winner?: string } {
-  if (currentInning === 1) {
-    return { nextInning: 2, nextBattingTeam: battingTeam === "A" ? "B" : "A" };
-  }
-  if (runsA > runsB) return { winner: teamA };
-  if (runsB > runsA) return { winner: teamB };
-  return { winner: "Match nul" };
-}
+import {
+  addWicket,
+  correctWicket,
+  getChaseResult,
+  getFinalResult,
+  MAX_WICKETS,
+  nextBattingTeam,
+} from "@/utils/scoring/cricket";
+import { applyScoreDelta } from "@/utils/scoring/common";
 
 describe("Cricket wickets", () => {
-  it("starts at 0", () => expect(handleWicket(0)).toBe(1));
-  it("max 10 wickets — cannot exceed", () => expect(handleWicket(10)).toBe(10));
-  it("9th wicket can be added", () => expect(handleWicket(9)).toBe(10));
-  it("wicket increments normally", () => expect(handleWicket(4)).toBe(5));
+  it("starts at 0", () => expect(addWicket(0)).toBe(1));
+  it("max 10 wickets — cannot exceed", () => expect(addWicket(MAX_WICKETS)).toBe(10));
+  it("9th wicket can be added", () => expect(addWicket(9)).toBe(10));
+  it("wicket increments normally", () => expect(addWicket(4)).toBe(5));
 });
 
 describe("Cricket runs", () => {
-  it("1 run", () => expect(handleRun(0, 1)).toBe(1));
-  it("4 runs (boundary)", () => expect(handleRun(20, 4)).toBe(24));
-  it("6 runs (six)", () => expect(handleRun(50, 6)).toBe(56));
+  it("1 run", () => expect(applyScoreDelta(0, 1)).toBe(1));
+  it("4 runs (boundary)", () => expect(applyScoreDelta(20, 4)).toBe(24));
+  it("6 runs (six)", () => expect(applyScoreDelta(50, 6)).toBe(56));
   it("accumulates across balls", () => {
-    let runs = 0;
-    [1, 4, 6, 2, 0, 1].forEach((r) => { runs = handleRun(runs, r); });
+    const runs = [1, 4, 6, 2, 0, 1].reduce(applyScoreDelta, 0);
     expect(runs).toBe(14);
   });
 });
 
 describe("Cricket innings alternation", () => {
-  it("end of inning 1: moves to inning 2 and swaps batting team", () => {
-    const result = endInning(1, "A", 120, 0, "Équipe A", "Équipe B");
-    expect(result.nextInning).toBe(2);
-    expect(result.nextBattingTeam).toBe("B");
+  it("end of inning 1: team A batting → B bats in inning 2", () => {
+    expect(nextBattingTeam("A")).toBe("B");
   });
   it("if team B bats first, swap to A in inning 2", () => {
-    const result = endInning(1, "B", 0, 0, "A", "B");
-    expect(result.nextBattingTeam).toBe("A");
+    expect(nextBattingTeam("B")).toBe("A");
   });
 });
 
-describe("Cricket match winner", () => {
-  it("Team A wins if runsA > runsB at end of inning 2", () => {
-    const result = endInning(2, "B", 200, 180, "Team A", "Team B");
-    expect(result.winner).toBe("Team A");
-  });
-  it("Team B wins if runsB > runsA", () => {
-    const result = endInning(2, "A", 150, 180, "Team A", "Team B");
-    expect(result.winner).toBe("Team B");
-  });
-  it("draw if runsA === runsB", () => {
-    const result = endInning(2, "A", 150, 150, "Team A", "Team B");
-    expect(result.winner).toBe("Match nul");
-  });
+describe("Cricket match winner (innings ended manually)", () => {
+  it("A wins if runsA > runsB", () => expect(getFinalResult(200, 180)).toBe("A"));
+  it("B wins if runsB > runsA", () => expect(getFinalResult(150, 180)).toBe("B"));
+  it("draw if runsA === runsB", () => expect(getFinalResult(150, 150)).toBe("draw"));
 });
 
-describe("Cricket starting batting team", () => {
-  it("reset uses startingBattingTeam", () => {
-    // Simulates resetMatch logic
-    const startingBattingTeam: "A" | "B" = "B";
-    const battingTeam = startingBattingTeam;
-    expect(battingTeam).toBe("B");
+describe("Cricket automatic end of the chase (2nd innings)", () => {
+  it("chase still on below the target", () => {
+    expect(getChaseResult(150, 3, 180, "B")).toBeNull();
+  });
+  it("equal to the target is not a win yet", () => {
+    expect(getChaseResult(180, 3, 180, "B")).toBeNull();
+  });
+  it("chasing team wins as soon as it passes the target", () => {
+    expect(getChaseResult(181, 3, 180, "B")).toEqual({ winner: "B" });
+  });
+  it("chasing team all out below the target → defending team wins", () => {
+    expect(getChaseResult(150, 10, 180, "B")).toEqual({ winner: "A" });
+  });
+  it("all out on equal runs → draw", () => {
+    expect(getChaseResult(180, 10, 180, "A")).toEqual({ winner: "draw" });
+  });
+  it("passing the target on the last wicket still wins", () => {
+    expect(getChaseResult(181, 10, 180, "A")).toEqual({ winner: "A" });
   });
 });
-
-const handleCorrectionRun = (runs: number) => Math.max(0, runs - 1);
-const handleCorrectionWicket = (wickets: number) => Math.max(0, wickets - 1);
-const handleCorrectionOver = (overs: number) => Math.max(0, overs - 1);
 
 describe("Cricket score corrections", () => {
-  it("correction run: 15 → 14", () => expect(handleCorrectionRun(15)).toBe(14));
-  it("correction run cannot go below 0", () => expect(handleCorrectionRun(0)).toBe(0));
-  it("correction wicket: 3 → 2", () => expect(handleCorrectionWicket(3)).toBe(2));
-  it("correction wicket cannot go below 0", () => expect(handleCorrectionWicket(0)).toBe(0));
-  it("correction over: 5 → 4", () => expect(handleCorrectionOver(5)).toBe(4));
-  it("correction over cannot go below 0", () => expect(handleCorrectionOver(0)).toBe(0));
-  it("sequence: +6 then correction → 5", () => {
+  it("correction run: 15 → 14", () => expect(applyScoreDelta(15, -1)).toBe(14));
+  it("correction run can go negative", () => expect(applyScoreDelta(0, -1)).toBe(-1));
+  it("correction run 5 times from 0 → -5", () => {
     let runs = 0;
-    runs = handleRun(runs, 6);
-    runs = handleCorrectionRun(runs);
-    expect(runs).toBe(5);
+    for (let i = 0; i < 5; i++) runs = applyScoreDelta(runs, -1);
+    expect(runs).toBe(-5);
+  });
+  it("correction wicket: 3 → 2", () => expect(correctWicket(3)).toBe(2));
+  it("correction wicket minimum is 0", () => expect(correctWicket(0)).toBe(0));
+  it("correction over: 5 → 4", () => expect(applyScoreDelta(5, -1)).toBe(4));
+  it("correction over can go negative", () => expect(applyScoreDelta(0, -1)).toBe(-1));
+  it("sequence: +6 then correction → 5", () => {
+    expect(applyScoreDelta(applyScoreDelta(0, 6), -1)).toBe(5);
   });
 });

@@ -14,6 +14,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import {
+  applyPoint,
+  eraseLastPoint,
+  type SnapshotEntry,
+  type TennisScore,
+  type TennisState,
+} from "@/utils/scoring/tennis";
 
 type TennisSave = {
   scoreA: TennisScore; scoreB: TennisScore;
@@ -22,17 +29,7 @@ type TennisSave = {
   setsHistory: number[][];
   teamA: string; teamB: string;
   isTieBreak: boolean;
-};
-
-type TennisScore = 0 | 15 | 30 | 40 | "A" | "=";
-
-type TennisSnapshot = {
-  scoreA: TennisScore; scoreB: TennisScore;
-  gamesA: number; gamesB: number;
-  setsA: number; setsB: number;
-  setsHistory: number[][];
-  isTieBreak: boolean;
-  matchWinner: string | null;
+  setsToWin?: number; gamesToWinSet?: number; tieBreakEnabled?: boolean;
 };
 
 export default function TennisScore() {
@@ -50,18 +47,20 @@ export default function TennisScore() {
   const [gamesToWinSet, setGamesToWinSet] = useState(6);
   const [tieBreakEnabled, setTieBreakEnabled] = useState(true);
   const [isTieBreak, setIsTieBreak] = useState(false);
-  const [matchWinner, setMatchWinner] = useState<string | null>(null);
-  const [prevSnapshot, setPrevSnapshot] = useState<TennisSnapshot | null>(null);
+  const [matchWinner, setMatchWinner] = useState<"A" | "B" | null>(null);
+  const [snapshotStack, setSnapshotStack] = useState<SnapshotEntry[]>([]);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
-  const scoreOrder = [0, 15, 30, 40];
+  const scoreFont = Math.min(120, height * 0.28);
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<TennisSave>("tennis");
 
   useEffect(() => {
     if (!isLoaded) return;
-    save({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak });
-  }, [scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, isLoaded, save]);
+    save({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, setsToWin, gamesToWinSet, tieBreakEnabled });
+  }, [scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, teamA, teamB, isTieBreak, setsToWin, gamesToWinSet, tieBreakEnabled, isLoaded, save]);
+
+  const isMatchOver = setsA >= setsToWin || setsB >= setsToWin;
 
   const handleResume = useCallback(() => {
     const data = resumeSave();
@@ -72,144 +71,44 @@ export default function TennisScore() {
     setSetsHistory(data.setsHistory);
     setTeamA(data.teamA); setTeamB(data.teamB);
     setIsTieBreak(data.isTieBreak);
+    // Older saves don't have the match settings: keep the current ones.
+    if (data.setsToWin !== undefined) setSetsToWin(data.setsToWin);
+    if (data.gamesToWinSet !== undefined) setGamesToWinSet(data.gamesToWinSet);
+    if (data.tieBreakEnabled !== undefined) setTieBreakEnabled(data.tieBreakEnabled);
+    setSnapshotStack([]);
   }, [resumeSave]);
 
   const resetMatch = useCallback(() => {
-    setScoreA(0);
-    setScoreB(0);
-    setGamesA(0);
-    setGamesB(0);
-    setSetsA(0);
-    setSetsB(0);
+    setScoreA(0); setScoreB(0);
+    setGamesA(0); setGamesB(0);
+    setSetsA(0); setSetsB(0);
     setSetsHistory([]);
     setIsTieBreak(false);
-    setPrevSnapshot(null);
+    setSnapshotStack([]);
   }, []);
 
-  const handleUndo = useCallback(() => {
-    if (!prevSnapshot) return;
-    setScoreA(prevSnapshot.scoreA);
-    setScoreB(prevSnapshot.scoreB);
-    setGamesA(prevSnapshot.gamesA);
-    setGamesB(prevSnapshot.gamesB);
-    setSetsA(prevSnapshot.setsA);
-    setSetsB(prevSnapshot.setsB);
-    setSetsHistory(prevSnapshot.setsHistory);
-    setIsTieBreak(prevSnapshot.isTieBreak);
-    setMatchWinner(prevSnapshot.matchWinner);
-    setPrevSnapshot(null);
-  }, [prevSnapshot]);
+  const applyState = (s: TennisState) => {
+    setScoreA(s.scoreA); setScoreB(s.scoreB);
+    setGamesA(s.gamesA); setGamesB(s.gamesB);
+    setSetsA(s.setsA); setSetsB(s.setsB);
+    setSetsHistory(s.setsHistory);
+    setIsTieBreak(s.isTieBreak);
+    setMatchWinner(s.matchWinner);
+  };
 
-  const nextScore = (current: TennisScore): TennisScore => {
-    const index = (scoreOrder as number[]).indexOf(current as number);
-    return (index < scoreOrder.length - 1 ? scoreOrder[index + 1] : 40) as TennisScore;
+  // Erase last point scored by the given team (see eraseLastPoint).
+  const handleErase = (team: "A" | "B") => {
+    const { stack, state } = eraseLastPoint(snapshotStack, team);
+    if (!state) return;
+    applyState(state);
+    setSnapshotStack(stack);
   };
 
   const handlePoint = (team: "A" | "B") => {
-    setPrevSnapshot({ scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, isTieBreak, matchWinner });
-    if (isTieBreak) {
-      const a = team === "A" ? Number(scoreA) + 1 : Number(scoreA);
-      const b = team === "B" ? Number(scoreB) + 1 : Number(scoreB);
-      setScoreA(a as TennisScore);
-      setScoreB(b as TennisScore);
-
-      if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) {
-        setIsTieBreak(false);
-        finSet(a > b ? gamesA + 1 : gamesA, b > a ? gamesB + 1 : gamesB);
-        setScoreA(0);
-        setScoreB(0);
-      }
-
-      return;
-    }
-
-    if (scoreA === 40 && scoreB === 40) {
-      if (team === "A") setScoreA("A");
-      else setScoreB("A");
-      return;
-    }
-
-    if (scoreA === "A") {
-      if (team === "A") return winGame("A");
-      else {
-        setScoreA("=");
-        setScoreB("=");
-        return;
-      }
-    }
-
-    if (scoreB === "A") {
-      if (team === "B") return winGame("B");
-      else {
-        setScoreA("=");
-        setScoreB("=");
-        return;
-      }
-    }
-
-    if (scoreA === "=" || scoreB === "=") {
-      if (team === "A") setScoreA("A");
-      else setScoreB("A");
-      return;
-    }
-
-    if (team === "A") setScoreA(nextScore(scoreA));
-    else setScoreB(nextScore(scoreB));
-
-    if (scoreA === 40 && team === "A" && scoreB !== 40) winGame("A");
-    if (scoreB === 40 && team === "B" && scoreA !== 40) winGame("B");
-  };
-
-  const winGame = (team: "A" | "B") => {
-    const newGamesA = team === "A" ? gamesA + 1 : gamesA;
-    const newGamesB = team === "B" ? gamesB + 1 : gamesB;
-
-    if (
-      tieBreakEnabled &&
-      newGamesA === gamesToWinSet &&
-      newGamesB === gamesToWinSet
-    ) {
-      setIsTieBreak(true);
-      setGamesA(newGamesA);
-      setGamesB(newGamesB);
-      setScoreA(0);
-      setScoreB(0);
-      return;
-    }
-
-    if (
-      (newGamesA >= gamesToWinSet || newGamesB >= gamesToWinSet) &&
-      Math.abs(newGamesA - newGamesB) >= 2 &&
-      !isTieBreak
-    ) {
-      finSet(newGamesA, newGamesB);
-      setScoreA(0);
-      setScoreB(0);
-      return;
-    }
-
-    setGamesA(newGamesA);
-    setGamesB(newGamesB);
-    setScoreA(0);
-    setScoreB(0);
-  };
-
-  const finSet = (newGamesA: number, newGamesB: number) => {
-    setSetsHistory((prev) => [...prev, [newGamesA, newGamesB]]);
-
-    const teamAGagne = newGamesA > newGamesB;
-    if (teamAGagne) setSetsA((prev) => prev + 1);
-    else setSetsB((prev) => prev + 1);
-
-    const newSetsA = teamAGagne ? setsA + 1 : setsA;
-    const newSetsB = teamAGagne ? setsB : setsB + 1;
-
-    setGamesA(0);
-    setGamesB(0);
-
-    if (newSetsA === setsToWin || newSetsB === setsToWin) {
-      setMatchWinner(newSetsA === setsToWin ? teamA : teamB);
-    }
+    if (isMatchOver) return;
+    const current: TennisState = { scoreA, scoreB, gamesA, gamesB, setsA, setsB, setsHistory, isTieBreak, matchWinner };
+    setSnapshotStack(prev => [...prev, { by: team, state: current }]);
+    applyState(applyPoint(current, team, { gamesToWinSet, setsToWin, tieBreakEnabled }));
   };
 
   const pad = (text: string, length: number) =>
@@ -217,26 +116,11 @@ export default function TennisScore() {
 
   return (
     <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
-      <ResumeModal
-        visible={hasSavedScore}
-        onResume={handleResume}
-        onDiscard={clearSave}
-      />
+      <ResumeModal visible={hasSavedScore} onResume={handleResume} onDiscard={clearSave} />
 
-      {/* MODAL paramètres */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
-        <TextInput
-          placeholder="Nom Joueur A"
-          value={teamA}
-          onChangeText={setTeamA}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Nom Joueur B"
-          value={teamB}
-          onChangeText={setTeamB}
-          style={styles.input}
-        />
+        <TextInput placeholder="Nom Joueur A" value={teamA} onChangeText={setTeamA} style={styles.input} />
+        <TextInput placeholder="Nom Joueur B" value={teamB} onChangeText={setTeamB} style={styles.input} />
         <Text style={styles.inputTitle}>Nombre de sets gagnants</Text>
         <TextInput
           placeholder="Nombre de sets gagnants"
@@ -257,27 +141,17 @@ export default function TennisScore() {
           <Text style={[styles.inputTitle, { flex: 1 }]}>Activer le tie-break</Text>
           <TouchableOpacity
             onPress={() => setTieBreakEnabled(!tieBreakEnabled)}
-            style={{
-              width: 20,
-              height: 20,
-              borderWidth: 1,
-              borderColor: "#fff",
-              backgroundColor: tieBreakEnabled ? "green" : "#fff",
-            }}
+            style={{ width: 20, height: 20, borderWidth: 1, borderColor: "#fff", backgroundColor: tieBreakEnabled ? "green" : "#fff" }}
           />
         </View>
       </SettingsModal>
 
-      {/* Modal fin de match */}
       <Modal visible={!!matchWinner} transparent animationType="fade">
         <Pressable style={styles.winOverlay} onPress={() => setMatchWinner(null)}>
           <Pressable style={styles.winBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.winTitle}>🏆 Match terminé</Text>
-            <Text style={styles.winName}>{matchWinner} a gagné !</Text>
-            <TouchableOpacity
-              style={styles.newGameBtn}
-              onPress={() => { resetMatch(); setMatchWinner(null); }}
-            >
+            <Text style={styles.winName}>{matchWinner === "A" ? teamA : teamB} a gagné !</Text>
+            <TouchableOpacity style={styles.newGameBtn} onPress={() => { resetMatch(); setMatchWinner(null); }}>
               <Text style={styles.newGameText}>Nouvelle partie</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setMatchWinner(null)}>
@@ -288,33 +162,33 @@ export default function TennisScore() {
       </Modal>
 
       <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
-        <MaterialIcons name="sports-tennis" size={44} color="white" />
-        <Text style={{ fontSize: 44, color: "white" }}>☰</Text>
+        <MaterialIcons name="sports-tennis" size={26} color="white" />
+        <Text style={styles.burgerText}>☰</Text>
       </TouchableOpacity>
 
-      {/* Undo dernier point — bouton partagé centré */}
-      {prevSnapshot && (
-        <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
-          <MaterialCommunityIcons name="eraser" size={26} color="#aaa" />
-          <Text style={styles.undoLabel}>Annuler</Text>
-        </TouchableOpacity>
-      )}
-
       <View style={styles.scoresWrapper}>
+        {/* Joueur A */}
         <View style={styles.teamBox}>
           <Text style={styles.teamName}>{teamA}</Text>
           <TouchableOpacity onPress={() => handlePoint("A")} style={styles.scoreContainer}>
-            <Text style={styles.score}>{scoreA}</Text>
+            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
           </TouchableOpacity>
           <Text style={styles.sets}>Jeux : {gamesA}</Text>
+          <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("A")}>
+            <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
+          </TouchableOpacity>
         </View>
 
+        {/* Joueur B */}
         <View style={styles.teamBox}>
           <Text style={styles.teamName}>{teamB}</Text>
           <TouchableOpacity onPress={() => handlePoint("B")} style={styles.scoreContainer}>
-            <Text style={styles.score}>{scoreB}</Text>
+            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
           </TouchableOpacity>
           <Text style={styles.sets}>Jeux : {gamesB}</Text>
+          <TouchableOpacity style={styles.eraseBtn} onPress={() => handleErase("B")}>
+            <MaterialCommunityIcons name="eraser" size={22} color="#aaa" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -351,115 +225,43 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 20,
   },
-  teamName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-  },
-  scoreContainer: {
-    justifyContent: "center",
+  teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
+  scoreContainer: { justifyContent: "center", alignItems: "center", marginVertical: 20 },
+  score: { color: "#fff", fontWeight: "bold" },
+  sets: { fontSize: 20, color: "#fff", marginTop: 10 },
+  eraseBtn: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 16,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
-    marginVertical: 20,
-  },
-  score: {
-    color: "#fff",
-    fontSize: 120,
-    fontWeight: "bold",
-  },
-  sets: {
-    fontSize: 20,
-    color: "#fff",
-    marginTop: 10,
+    justifyContent: "center",
   },
   burger: {
     position: "absolute",
-    top: 30,
-    left: "48%",
-    zIndex: 10,
-  },
-  undoBtn: {
-    position: "absolute",
-    bottom: 20,
-    alignSelf: "center",
+    top: 10,
+    right: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    padding: 8,
     zIndex: 10,
-  },
-  undoLabel: { color: "#aaa", fontSize: 13, fontWeight: "600" },
-  inputTitle: {
-    fontSize: 18,
-    color: "#fff",
-    marginBottom: 2,
-    marginTop: 2,
-    textAlign: "center",
-  },
-  input: {
-    color: "#fff",
-    backgroundColor: "#333",
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  historyBox: {
-    paddingBottom: 10,
-    paddingHorizontal: 20,
-  },
-  historyRow: {
-    color: "#fff",
-    fontSize: 16,
-    marginVertical: 2,
-    fontFamily: "monospace",
-  },
-  winOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    minWidth: 44,
+    minHeight: 44,
     justifyContent: "center",
-    alignItems: "center",
   },
-  winBox: {
-    backgroundColor: "#222",
-    padding: 30,
-    borderRadius: 16,
-    width: "80%",
-    alignItems: "center",
-  },
-  winTitle: {
-    fontSize: 26,
-    color: "#fff",
-    fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  winName: {
-    fontSize: 22,
-    color: "#4caf50",
-    fontWeight: "bold",
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  newGameBtn: {
-    backgroundColor: "#4caf50",
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginBottom: 12,
-    width: "100%",
-    alignItems: "center",
-  },
-  newGameText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  closeText: {
-    color: "#aaa",
-    fontSize: 16,
-    textDecorationLine: "underline",
-  },
+  burgerText: { fontSize: 26, color: "white" },
+  inputTitle: { fontSize: 18, color: "#fff", marginBottom: 2, marginTop: 2, textAlign: "center" },
+  input: { color: "#fff", backgroundColor: "#333", padding: 10, borderRadius: 6, marginBottom: 10 },
+  historyBox: { paddingBottom: 10, paddingHorizontal: 20 },
+  historyRow: { color: "#fff", fontSize: 16, marginVertical: 2, fontFamily: "monospace" },
+  winOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
+  winBox: { backgroundColor: "#222", padding: 30, borderRadius: 16, width: "80%", alignItems: "center" },
+  winTitle: { fontSize: 26, color: "#fff", fontWeight: "bold", marginBottom: 10, textAlign: "center" },
+  winName: { fontSize: 22, color: "#4caf50", fontWeight: "bold", marginBottom: 24, textAlign: "center" },
+  newGameBtn: { backgroundColor: "#4caf50", paddingVertical: 12, paddingHorizontal: 30, borderRadius: 10, marginBottom: 12, width: "100%", alignItems: "center" },
+  newGameText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  closeText: { color: "#aaa", fontSize: 16, textDecorationLine: "underline" },
 });

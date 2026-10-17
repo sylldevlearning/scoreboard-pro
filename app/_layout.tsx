@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Slot, usePathname } from "expo-router";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -12,25 +12,64 @@ let MobileAds: any = null;
 let BannerAd: any = null;
 let BannerAdSize: any = null;
 let TestIds: any = null;
+let AdsConsent: any = null;
 try {
   const ads = require("react-native-google-mobile-ads");
   MobileAds = ads.default;
   BannerAd = ads.BannerAd;
   BannerAdSize = ads.BannerAdSize;
   TestIds = ads.TestIds;
+  AdsConsent = ads.AdsConsent;
 } catch {}
 
+/**
+ * GDPR: asks Google's UMP SDK for consent (it shows the form only when needed,
+ * e.g. first launch in the EEA, and stores the choice itself), then reports
+ * whether ads may be requested. A failed update falls back to the stored choice.
+ */
+async function gatherAdsConsent(): Promise<boolean> {
+  if (!AdsConsent) return false;
+  try {
+    await AdsConsent.gatherConsent();
+  } catch (e) {
+    if (__DEV__) console.warn("Ads consent error:", e);
+  }
+  try {
+    const info = await AdsConsent.getConsentInfo();
+    return info.canRequestAds === true;
+  } catch {
+    return false;
+  }
+}
+
+// Real ads only in the EAS "production" profile (EXPO_PUBLIC_APP_ENV is set in
+// eas.json). Dev, preview and local builds always get test ads so testers'
+// clicks can't get the AdMob account banned.
+const IS_PRODUCTION_BUILD =
+  !__DEV__ && process.env.EXPO_PUBLIC_APP_ENV === "production";
 const REAL_BANNER_UNIT_ID = process.env.EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID ?? "";
 const bannerUnitId =
-  TestIds && (__DEV__ || !REAL_BANNER_UNIT_ID)
+  TestIds && (!IS_PRODUCTION_BUILD || !REAL_BANNER_UNIT_ID)
     ? TestIds.BANNER
     : REAL_BANNER_UNIT_ID;
 
 export default function RootLayout() {
   const pathname = usePathname();
+  const [canShowAds, setCanShowAds] = useState(false);
 
+  // Consent first, then initialize the SDK and load ads.
   useEffect(() => {
-    MobileAds?.().initialize().catch(() => {});
+    let cancelled = false;
+    (async () => {
+      if (!(await gatherAdsConsent()) || cancelled) return;
+      try {
+        await MobileAds?.().initialize();
+      } catch (e) {
+        if (__DEV__) console.warn("MobileAds init error:", e);
+      }
+      if (!cancelled) setCanShowAds(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -71,7 +110,7 @@ export default function RootLayout() {
         <Slot />
       </View>
 
-      {BannerAd && BannerAdSize ? (
+      {canShowAds && BannerAd && BannerAdSize ? (
         <View style={styles.bannerContainer}>
           <BannerAd
             unitId={bannerUnitId}
@@ -106,7 +145,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === "ios" ? 20 : 0,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "flex-end",
     alignItems: "flex-end",
     padding: Platform.OS === "android" ? 20 : 30,

@@ -9,7 +9,7 @@ import {
   Pressable,
   useWindowDimensions,
 } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
@@ -19,6 +19,7 @@ import CardTracker from "@/components/CardTracker";
 import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import { getSetTarget, isMatchWon, isSetWon } from "@/utils/scoring/volleyball";
 
 const VOLLEYBALL_CARDS: CardTypeConfig[] = [
   { type: "yellow", label: "Avertissement", emoji: "🟨", color: "#f1c40f" },
@@ -26,12 +27,15 @@ const VOLLEYBALL_CARDS: CardTypeConfig[] = [
   { type: "red_yellow", label: "Expulsion", emoji: "🟥🟨", color: "#e67e22" },
 ];
 
+const HEADER_H = 44;
+
 type VolleyballSave = {
   scoreA: number; scoreB: number;
   setsA: number; setsB: number;
   timeoutsA: number; timeoutsB: number;
   teamA: string; teamB: string;
   setsHistory: string[];
+  nbSetsToWin?: number; tieBreakEnabled?: boolean; startScore?: number;
 };
 
 export default function VolleyballScore() {
@@ -56,23 +60,25 @@ export default function VolleyballScore() {
 
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<VolleyballSave>("volleyball");
   const timerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const buzzer = useAudioPlayer(require("../../assets/buzzer.mp3"));
 
-  // Cleanup timeout interval on unmount to prevent leaks
   useEffect(() => {
     return () => {
       if (timerInterval.current) clearInterval(timerInterval.current);
-      soundRef.current?.unloadAsync();
     };
   }, []);
+
   const { cards, addCard, resetCards } = useCardManager();
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const scoreFont = Math.min(120, (height - HEADER_H) * 0.28);
 
   useEffect(() => {
     if (!isLoaded) return;
-    save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory });
-  }, [scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, isLoaded, save]);
+    save({ scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, nbSetsToWin, tieBreakEnabled, startScore });
+  }, [scoreA, scoreB, setsA, setsB, timeoutsA, timeoutsB, teamA, teamB, setsHistory, nbSetsToWin, tieBreakEnabled, startScore, isLoaded, save]);
+
+  const isMatchOver = isMatchWon(setsA, setsB, nbSetsToWin);
 
   const handleResume = useCallback(() => {
     const data = resumeSave();
@@ -82,20 +88,24 @@ export default function VolleyballScore() {
     setTimeoutsA(data.timeoutsA); setTimeoutsB(data.timeoutsB);
     setTeamA(data.teamA); setTeamB(data.teamB);
     setSetsHistory(data.setsHistory);
+    // Older saves don't have the match settings: keep the current ones.
+    if (data.nbSetsToWin !== undefined) setNbSetsToWin(data.nbSetsToWin);
+    if (data.tieBreakEnabled !== undefined) setTieBreakEnabled(data.tieBreakEnabled);
+    if (data.startScore !== undefined) setStartScore(data.startScore);
   }, [resumeSave]);
 
   const playBuzz = useCallback(async () => {
     try {
-      await soundRef.current?.unloadAsync();
-      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
-      soundRef.current = sound;
-      await sound.playAsync();
+      await buzzer.seekTo(0);
+      buzzer.play();
     } catch (e) {
       if (__DEV__) console.warn("Buzzer error:", e);
     }
-  }, []);
+  }, [buzzer]);
 
   const startTimeout = useCallback((team: "A" | "B") => {
+    // The ref check also catches a double tap faster than the re-render.
+    if (isTimeout || timerInterval.current) return;
     if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0)) return;
 
     playBuzz();
@@ -104,7 +114,7 @@ export default function VolleyballScore() {
 
     timerInterval.current = setInterval(() => {
       setTimer((prev) => {
-        if (prev <= 0) return 0; // guard: already expired, prevent double-fire
+        if (prev <= 0) return 0;
         if (prev === 1) {
           clearInterval(timerInterval.current!);
           timerInterval.current = null;
@@ -118,9 +128,12 @@ export default function VolleyballScore() {
 
     if (team === "A") setTimeoutsA((t) => t - 1);
     else setTimeoutsB((t) => t - 1);
-  }, [playBuzz, timeoutsA, timeoutsB]);
+  }, [playBuzz, isTimeout, timeoutsA, timeoutsB]);
 
   const resetScores = useCallback(() => {
+    if (timerInterval.current) clearInterval(timerInterval.current);
+    timerInterval.current = null;
+    setIsTimeout(false);
     setScoreA(startScore);
     setScoreB(startScore);
     setTimeoutsA(2);
@@ -134,19 +147,15 @@ export default function VolleyballScore() {
   }, [startScore, resetCards]);
 
   const handleScoreChange = useCallback((team: "A" | "B", delta: number) => {
+    if (isMatchOver) return;
     const newScoreA = team === "A" ? scoreA + delta : scoreA;
     const newScoreB = team === "B" ? scoreB + delta : scoreB;
     setScoreA(newScoreA);
     setScoreB(newScoreB);
 
-    const totalSets = setsA + setsB;
-    const isLastSet = tieBreakEnabled && totalSets === nbSetsToWin * 2 - 2;
-    const target = isLastSet ? 15 : 25;
+    const target = getSetTarget(setsA, setsB, nbSetsToWin, tieBreakEnabled);
 
-    if (
-      (newScoreA >= target || newScoreB >= target) &&
-      Math.abs(newScoreA - newScoreB) >= 2
-    ) {
+    if (isSetWon(newScoreA, newScoreB, target)) {
       const wonByA = newScoreA > newScoreB;
       const newSetsA = wonByA ? setsA + 1 : setsA;
       const newSetsB = wonByA ? setsB : setsB + 1;
@@ -154,8 +163,8 @@ export default function VolleyballScore() {
       setSetsHistory((prev) => [...prev, `${newScoreA}-${newScoreB}`]);
       setResultatSets(() => [`${newScoreA}-${newScoreB}`]);
 
-      if (newSetsA === nbSetsToWin || newSetsB === nbSetsToWin) {
-        const winnerTeam = newSetsA === nbSetsToWin ? teamA : teamB;
+      if (isMatchWon(newSetsA, newSetsB, nbSetsToWin)) {
+        const winnerTeam = newSetsA >= nbSetsToWin ? teamA : teamB;
         setMatchWinner(`${winnerTeam} gagne ${newSetsA}-${newSetsB}`);
       } else {
         setWinner(wonByA ? teamA : teamB);
@@ -168,8 +177,7 @@ export default function VolleyballScore() {
       setTimeoutsA(2);
       setTimeoutsB(2);
     }
-
-  }, [scoreA, scoreB, setsA, setsB, tieBreakEnabled, nbSetsToWin, teamA, teamB, startScore, playBuzz]);
+  }, [isMatchOver, scoreA, scoreB, setsA, setsB, tieBreakEnabled, nbSetsToWin, teamA, teamB, startScore]);
 
   const handleAddCard = useCallback((team: "A" | "B", cardType: string) => {
     addCard(team, cardType);
@@ -179,27 +187,12 @@ export default function VolleyballScore() {
   }, [addCard, handleScoreChange]);
 
   return (
-    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
-      <ResumeModal
-        visible={hasSavedScore}
-        onResume={handleResume}
-        onDiscard={clearSave}
-      />
+    <View style={styles.container}>
+      <ResumeModal visible={hasSavedScore} onResume={handleResume} onDiscard={clearSave} />
 
-      {/* MODAL paramètres */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetScores}>
-        <TextInput
-          placeholder="Nom équipe A"
-          value={teamA}
-          onChangeText={setTeamA}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Nom équipe B"
-          value={teamB}
-          onChangeText={setTeamB}
-          style={styles.input}
-        />
+        <TextInput placeholder="Nom équipe A" value={teamA} onChangeText={setTeamA} style={styles.input} />
+        <TextInput placeholder="Nom équipe B" value={teamB} onChangeText={setTeamB} style={styles.input} />
         <Text style={styles.inputTitle}>Score de départ</Text>
         <TextInput
           keyboardType="number-pad"
@@ -239,22 +232,14 @@ export default function VolleyballScore() {
       <Modal visible={!!winner} transparent animationType="fade">
         <Pressable style={styles.overlay} onPress={() => setWinner(null)}>
           <Pressable style={styles.resultBox} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.resultText}>
-              Set gagné par {winner}: {resultatSets}{" "}
-            </Text>
+            <Text style={styles.resultText}>Set gagné par {winner}: {resultatSets}</Text>
           </Pressable>
         </Pressable>
       </Modal>
 
       {/* Modal fin de match */}
       <Modal visible={!!matchWinner} transparent animationType="fade">
-        <Pressable
-          style={styles.overlay}
-          onPress={() => {
-            setMatchWinner(null);
-            resetScores();
-          }}
-        >
+        <Pressable style={styles.overlay} onPress={() => { setMatchWinner(null); resetScores(); }}>
           <Pressable style={styles.resultBox} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.resultText}>{matchWinner}</Text>
             <Text style={styles.setsRecap}>{setsHistory.join("  ")}</Text>
@@ -265,48 +250,57 @@ export default function VolleyballScore() {
         </Pressable>
       </Modal>
 
-      {/* Bouton paramètres */}
-      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
-        <FontAwesome5 name="volleyball-ball" size={44} color="white" />
-        <Text style={{ fontSize: 44, color: "white" }}>☰</Text>
-      </TouchableOpacity>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: isPortrait ? 30 : 6 }]}>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
+          <FontAwesome5 name="volleyball-ball" size={26} color="white" />
+          <Text style={styles.burgerText}>☰</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Équipes */}
-      {[
-        ["A", teamA, scoreA, setsA, timeoutsA],
-        ["B", teamB, scoreB, setsB, timeoutsB],
-      ].map(([team, name, score, sets, timeouts]) => (
-        <View key={team} style={styles.teamBox}>
-          <Text style={styles.teamName}>{name}</Text>
-          <CardTracker team={team as "A" | "B"} cards={cards} cardTypes={VOLLEYBALL_CARDS} />
-          <TouchableOpacity onPress={() => handleScoreChange(team as "A" | "B", -1)}>
-            <MaterialCommunityIcons name="eraser" size={32} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleScoreChange(team as "A" | "B", 1)}
-            style={styles.scoreContainer}
-          >
-            <Text style={styles.score}>{score}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => startTimeout(team as "A" | "B")}>
-            <Text style={styles.undo}>T ({timeouts})</Text>
-          </TouchableOpacity>
-          <Text style={styles.sets}>Sets : {sets}</Text>
-          <CardActionButtons
-            team={team as "A" | "B"}
-            teamName={name as string}
-            cardTypes={VOLLEYBALL_CARDS}
-            onAddCard={handleAddCard}
-          />
-        </View>
-      ))}
-
-      {/* Timer temps mort */}
+      {/* Timeout banner */}
       {isTimeout && (
-        <Text style={[styles.timeoutText, isPortrait && { bottom: 200 }]}>
-          ⏳ Temps mort : {timer}s
-        </Text>
+        <View style={styles.timeoutBanner}>
+          <Text style={styles.timeoutText}>⏳ Temps mort : {timer}s</Text>
+        </View>
       )}
+
+      {/* Teams */}
+      <View style={styles.teamsRow}>
+        {[
+          ["A", teamA, scoreA, setsA, timeoutsA],
+          ["B", teamB, scoreB, setsB, timeoutsB],
+        ].map(([team, name, score, sets, timeouts]) => (
+          <View key={team as string} style={styles.teamBox}>
+            <Text style={styles.teamName}>{name as string}</Text>
+            <CardTracker team={team as "A" | "B"} cards={cards} cardTypes={VOLLEYBALL_CARDS} />
+            <TouchableOpacity onPress={() => handleScoreChange(team as "A" | "B", -1)}>
+              <MaterialCommunityIcons name="eraser" size={32} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleScoreChange(team as "A" | "B", 1)}
+              style={styles.scoreContainer}
+            >
+              <Text style={[styles.score, { fontSize: scoreFont }]}>{score as number}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={isTimeout}
+              style={isTimeout && styles.disabled}
+              onPress={() => startTimeout(team as "A" | "B")}
+            >
+              <Text style={styles.undo}>T ({timeouts as number})</Text>
+            </TouchableOpacity>
+            <Text style={styles.sets}>Sets : {sets as number}</Text>
+            <CardActionButtons
+              team={team as "A" | "B"}
+              teamName={name as string}
+              cardTypes={VOLLEYBALL_CARDS}
+              onAddCard={handleAddCard}
+            />
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -315,69 +309,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+    flexDirection: "column",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+    minHeight: HEADER_H,
+  },
+  burger: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8, minWidth: 44, minHeight: 44, justifyContent: "center" },
+  burgerText: { fontSize: 26, color: "white" },
+  timeoutBanner: {
+    backgroundColor: "rgba(255,200,0,0.15)",
+    paddingVertical: 4,
+    alignItems: "center",
+  },
+  timeoutText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  teamsRow: {
+    flex: 1,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   teamBox: {
     alignItems: "center",
     justifyContent: "flex-end",
     flex: 1,
-    gap: 10,
+    gap: 8,
   },
-  teamName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-  },
-  scoreContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-  score: {
-    color: "#fff",
-    fontSize: 120,
-    fontWeight: "bold",
-  },
-  undo: {
-    fontSize: 28,
-    color: "#fff",
-  },
-  sets: {
-    fontSize: 20,
-    color: "#fff",
-    marginBottom: 10,
-  },
-  timeoutText: {
-    position: "absolute",
-    bottom: 20,
-    width: "100%",
-    textAlign: "center",
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  burger: {
-    position: "absolute",
-    top: 30,
-    left: "48%",
-    zIndex: 10,
-  },
-  inputTitle: {
-    fontSize: 12,
-    color: "#fff",
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  input: {
-    backgroundColor: "#333",
-    color: "#fff",
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
+  teamName: { fontSize: 24, fontWeight: "bold", color: "#fff" },
+  scoreContainer: { flexGrow: 1, justifyContent: "center" },
+  score: { color: "#fff", fontWeight: "bold" },
+  undo: { fontSize: 28, color: "#fff" },
+  disabled: { opacity: 0.4 },
+  sets: { fontSize: 20, color: "#fff", marginBottom: 10 },
+  inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
+  input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -390,19 +360,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  resultText: {
-    color: "#fff",
-    fontSize: 24,
-    marginBottom: 10,
-  },
-  setsRecap: {
-    color: "#ccc",
-    fontSize: 20,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  closeBtnText: {
-    fontSize: 24,
-    color: "#fff",
-  },
+  resultText: { color: "#fff", fontSize: 24, marginBottom: 10 },
+  setsRecap: { color: "#ccc", fontSize: 20, textAlign: "center", marginBottom: 10 },
+  closeBtnText: { fontSize: 24, color: "#fff" },
 });

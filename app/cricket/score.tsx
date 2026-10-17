@@ -7,11 +7,14 @@ import {
   Modal,
   TextInput,
   Pressable,
+  useWindowDimensions,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import { addWicket, correctWicket, getChaseResult, getFinalResult, nextBattingTeam } from "@/utils/scoring/cricket";
+import { applyScoreDelta } from "@/utils/scoring/common";
 
 type CricketSave = {
   teamA: string; teamB: string;
@@ -37,8 +40,11 @@ export default function CricketScore() {
 
   const [showModal, setShowModal] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
+  const [isMatchOver, setIsMatchOver] = useState(false);
 
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<CricketSave>("cricket");
+  const { width, height } = useWindowDimensions();
+  const isPortrait = height > width;
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -54,18 +60,35 @@ export default function CricketScore() {
     setCurrentInning(data.currentInning); setBattingTeam(data.battingTeam);
   }, [resumeSave]);
 
+  const finishMatch = useCallback((result: "A" | "B" | "draw") => {
+    setIsMatchOver(true);
+    setWinner(result === "draw" ? "Match nul" : result === "A" ? teamA : teamB);
+  }, [teamA, teamB]);
+
+  // Second innings ends by itself once the target is passed or the side is all out.
+  useEffect(() => {
+    if (currentInning !== 2 || isMatchOver) return;
+    const chasingA = battingTeam === "A";
+    const result = getChaseResult(
+      chasingA ? runsA : runsB,
+      chasingA ? wicketsA : wicketsB,
+      chasingA ? runsB : runsA,
+      battingTeam
+    );
+    if (result) finishMatch(result.winner);
+  }, [currentInning, battingTeam, runsA, runsB, wicketsA, wicketsB, isMatchOver, finishMatch]);
+
   const handleRun = useCallback((team: "A" | "B", run: number) => {
-    if (team === "A") setRunsA((r) => r + run);
-    else setRunsB((r) => r + run);
-  }, []);
+    if (isMatchOver) return;
+    if (team === "A") setRunsA((r) => applyScoreDelta(r, run));
+    else setRunsB((r) => applyScoreDelta(r, run));
+  }, [isMatchOver]);
 
   const handleWicket = useCallback((team: "A" | "B") => {
-    if (team === "A") {
-      if (wicketsA < 10) setWicketsA((w) => w + 1);
-    } else {
-      if (wicketsB < 10) setWicketsB((w) => w + 1);
-    }
-  }, [wicketsA, wicketsB]);
+    if (isMatchOver) return;
+    if (team === "A") setWicketsA(addWicket);
+    else setWicketsB(addWicket);
+  }, [isMatchOver]);
 
   const handleOver = useCallback((team: "A" | "B") => {
     if (team === "A") setOversA((o) => o + 1);
@@ -73,28 +96,26 @@ export default function CricketScore() {
   }, []);
 
   const handleCorrectionRun = useCallback((team: "A" | "B") => {
-    if (team === "A") setRunsA((r) => Math.max(0, r - 1));
-    else setRunsB((r) => Math.max(0, r - 1));
+    if (team === "A") setRunsA((r) => applyScoreDelta(r, -1));
+    else setRunsB((r) => applyScoreDelta(r, -1));
   }, []);
 
   const handleCorrectionWicket = useCallback((team: "A" | "B") => {
-    if (team === "A") setWicketsA((w) => Math.max(0, w - 1));
-    else setWicketsB((w) => Math.max(0, w - 1));
+    if (team === "A") setWicketsA(correctWicket);
+    else setWicketsB(correctWicket);
   }, []);
 
   const handleCorrectionOver = useCallback((team: "A" | "B") => {
-    if (team === "A") setOversA((o) => Math.max(0, o - 1));
-    else setOversB((o) => Math.max(0, o - 1));
+    if (team === "A") setOversA((o) => applyScoreDelta(o, -1));
+    else setOversB((o) => applyScoreDelta(o, -1));
   }, []);
 
   const endInning = () => {
     if (currentInning === 1) {
       setCurrentInning(2);
-      setBattingTeam(battingTeam === "A" ? "B" : "A");
+      setBattingTeam(nextBattingTeam(battingTeam));
     } else {
-      if (runsA > runsB) setWinner(teamA);
-      else if (runsB > runsA) setWinner(teamB);
-      else setWinner("Match nul");
+      finishMatch(getFinalResult(runsA, runsB));
     }
   };
 
@@ -104,10 +125,11 @@ export default function CricketScore() {
     setCurrentInning(1);
     setBattingTeam(startingBattingTeam);
     setWinner(null);
+    setIsMatchOver(false);
   }, [startingBattingTeam]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
       <ResumeModal
         visible={hasSavedScore}
         onResume={handleResume}

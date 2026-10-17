@@ -7,12 +7,15 @@ import {
   TextInput,
   useWindowDimensions,
 } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioPlayer } from "expo-audio";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import { applyScoreDelta } from "@/utils/scoring/common";
+
+const HEADER_H = 44;
 
 type BasketballSave = { scoreA: number; scoreB: number; teamA: string; teamB: string };
 
@@ -30,45 +33,27 @@ export default function BasketScore() {
   const [isTimeout, setIsTimeout] = useState(false);
   const [timeoutTimer, setTimeoutTimer] = useState(30);
   const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-
-  // Undo: last scored action per team
-  const lastActionA = useRef<number | null>(null);
-  const lastActionB = useRef<number | null>(null);
-  const [undoToast, setUndoToast] = useState<string | null>(null);
-  const undoToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buzzer = useAudioPlayer(require("../../assets/buzzer.mp3"));
 
   useEffect(() => {
     return () => {
       if (timeoutIntervalRef.current) clearInterval(timeoutIntervalRef.current);
-      if (undoToastRef.current) clearTimeout(undoToastRef.current);
-      soundRef.current?.unloadAsync();
     };
   }, []);
 
   const { width, height } = useWindowDimensions();
   const isPortrait = height > width;
+  const scoreFont = Math.min(120, (height - HEADER_H) * 0.28);
   const { save, resume: resumeSave, clear: clearSave, hasSavedScore, isLoaded } = usePersistedScore<BasketballSave>("basketball");
-
-  const showUndoToast = useCallback((msg: string) => {
-    if (undoToastRef.current) clearTimeout(undoToastRef.current);
-    setUndoToast(msg);
-    undoToastRef.current = setTimeout(() => {
-      setUndoToast(null);
-      undoToastRef.current = null;
-    }, 1500);
-  }, []);
 
   const playBuzz = useCallback(async () => {
     try {
-      await soundRef.current?.unloadAsync();
-      const { sound } = await Audio.Sound.createAsync(require("../../assets/buzzer.mp3"));
-      soundRef.current = sound;
-      await sound.playAsync();
+      await buzzer.seekTo(0);
+      buzzer.play();
     } catch (e) {
       if (__DEV__) console.warn("Buzzer error:", e);
     }
-  }, []);
+  }, [buzzer]);
 
   const { timeLeft, isRunning: isQuarterRunning, start: startQuarterTimer, reset: resetTimer } =
     useGameTimer(playBuzz);
@@ -86,6 +71,8 @@ export default function BasketScore() {
   }, [resumeSave]);
 
   const startTimeout = useCallback((team: "A" | "B") => {
+    // The ref check also catches a double tap faster than the re-render.
+    if (isTimeout || timeoutIntervalRef.current) return;
     if ((team === "A" && timeoutsA === 0) || (team === "B" && timeoutsB === 0)) return;
 
     playBuzz();
@@ -108,51 +95,28 @@ export default function BasketScore() {
 
     if (team === "A") setTimeoutsA((t) => t - 1);
     else setTimeoutsB((t) => t - 1);
-  }, [playBuzz, timeoutsA, timeoutsB]);
+  }, [playBuzz, isTimeout, timeoutsA, timeoutsB]);
 
   const resetScores = useCallback(() => {
+    if (timeoutIntervalRef.current) clearInterval(timeoutIntervalRef.current);
+    timeoutIntervalRef.current = null;
+    setIsTimeout(false);
     setScoreA(0);
     setScoreB(0);
-    lastActionA.current = null;
-    lastActionB.current = null;
-    setUndoToast(null);
     setTimeoutsA(timeoutsPerTeam);
     setTimeoutsB(timeoutsPerTeam);
     resetTimer();
   }, [timeoutsPerTeam, resetTimer]);
 
   const handleScore = useCallback((team: "A" | "B", delta: number) => {
-    if (team === "A") {
-      setScoreA((s) => Math.max(0, s + delta));
-      lastActionA.current = delta;
-    } else {
-      setScoreB((s) => Math.max(0, s + delta));
-      lastActionB.current = delta;
-    }
+    if (team === "A") setScoreA((s) => applyScoreDelta(s, delta));
+    else setScoreB((s) => applyScoreDelta(s, delta));
   }, []);
 
-  const handleUndo = useCallback((team: "A" | "B") => {
-    const last = team === "A" ? lastActionA.current : lastActionB.current;
-    if (last === null) return;
-    if (team === "A") {
-      setScoreA((s) => Math.max(0, s - last));
-      lastActionA.current = null;
-    } else {
-      setScoreB((s) => Math.max(0, s - last));
-      lastActionB.current = null;
-    }
-    showUndoToast(`+${last} annulé`);
-  }, [showUndoToast]);
-
   return (
-    <View style={[styles.container, { paddingTop: isPortrait ? 60 : 10 }]}>
-      <ResumeModal
-        visible={hasSavedScore}
-        onResume={handleResume}
-        onDiscard={clearSave}
-      />
+    <View style={styles.container}>
+      <ResumeModal visible={hasSavedScore} onResume={handleResume} onDiscard={clearSave} />
 
-      {/* MODAL */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetScores}>
         <TextInput placeholder="Nom équipe A" value={teamA} onChangeText={setTeamA} style={styles.input} />
         <TextInput placeholder="Nom équipe B" value={teamB} onChangeText={setTeamB} style={styles.input} />
@@ -184,105 +148,108 @@ export default function BasketScore() {
         </TouchableOpacity>
       </SettingsModal>
 
-      {/* Burger */}
-      <TouchableOpacity
-        style={[styles.burger, { paddingTop: isPortrait ? 60 : 10 }]}
-        onPress={() => setShowModal(true)}
-      >
-        <MaterialCommunityIcons name="basketball-hoop-outline" size={40} color="white" />
-        <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
-      </TouchableOpacity>
-
-      {/* Chrono */}
-      {isQuarterRunning && (
-        <Text style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}>
-          ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
-        </Text>
-      )}
-      {isTraining && !isQuarterRunning && (
-        <TouchableOpacity
-          onPress={() => startQuarterTimer(quarterDuration)}
-          style={[styles.timerTopLeft, { paddingTop: isPortrait ? 20 : 10 }]}
-        >
-          <Text style={styles.timerStart}>▶️</Text>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: isPortrait ? 30 : 6 }]}>
+        <View style={styles.timerArea}>
+          {isQuarterRunning && (
+            <Text style={styles.timerDisplay}>
+              ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+            </Text>
+          )}
+          {isTraining && !isQuarterRunning && (
+            <TouchableOpacity onPress={() => startQuarterTimer(quarterDuration)}>
+              <Text style={styles.timerStart}>▶️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
+          <MaterialCommunityIcons name="basketball-hoop-outline" size={26} color="white" />
+          <Text style={styles.burgerText}>☰</Text>
         </TouchableOpacity>
-      )}
+      </View>
 
-      {/* Temps mort actif */}
+      {/* Timeout banner */}
       {isTimeout && (
-        <Text style={[styles.timeoutText, isPortrait && { bottom: 200 }]}>
-          ⏳ Temps mort : {timeoutTimer}s
-        </Text>
-      )}
-
-      {/* Équipe A */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamA}</Text>
-        <TouchableOpacity onPress={() => handleUndo("A")} style={styles.undoBtn}>
-          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleScore("A", 2)}>
-          <Text style={styles.score}>{scoreA}</Text>
-        </TouchableOpacity>
-        <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => startTimeout("A")}><Text style={styles.btn}>T ({timeoutsA})</Text></TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Équipe B */}
-      <View style={styles.teamBox}>
-        <Text style={styles.teamName}>{teamB}</Text>
-        <TouchableOpacity onPress={() => handleUndo("B")} style={styles.undoBtn}>
-          <MaterialCommunityIcons name="eraser" size={28} color="#aaa" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleScore("B", 2)}>
-          <Text style={styles.score}>{scoreB}</Text>
-        </TouchableOpacity>
-        <View style={styles.row}>
-          <TouchableOpacity onPress={() => handleScore("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Toast undo */}
-      {undoToast && (
-        <View style={styles.toast} pointerEvents="none">
-          <Text style={styles.toastText}>{undoToast}</Text>
+        <View style={styles.timeoutBanner}>
+          <Text style={styles.timeoutText}>⏳ Temps mort : {timeoutTimer}s</Text>
         </View>
       )}
+
+      {/* Teams */}
+      <View style={styles.teamsRow}>
+        <View style={styles.teamBox}>
+          <Text style={styles.teamName}>{teamA}</Text>
+          <TouchableOpacity onPress={() => handleScore("A", -1)}>
+            <MaterialCommunityIcons name="eraser" size={28} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("A", 2)}>
+            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreA}</Text>
+          </TouchableOpacity>
+          <View style={styles.row}>
+            <TouchableOpacity onPress={() => handleScore("A", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleScore("A", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleScore("A", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+            <TouchableOpacity disabled={isTimeout} style={isTimeout && styles.disabled} onPress={() => startTimeout("A")}><Text style={styles.btn}>T ({timeoutsA})</Text></TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.teamBox}>
+          <Text style={styles.teamName}>{teamB}</Text>
+          <TouchableOpacity onPress={() => handleScore("B", -1)}>
+            <MaterialCommunityIcons name="eraser" size={28} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleScore("B", 2)}>
+            <Text style={[styles.score, { fontSize: scoreFont }]}>{scoreB}</Text>
+          </TouchableOpacity>
+          <View style={styles.row}>
+            <TouchableOpacity onPress={() => handleScore("B", 1)}><Text style={styles.btn}>+1</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleScore("B", 2)}><Text style={styles.btn}>+2</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => handleScore("B", 3)}><Text style={styles.btn}>+3</Text></TouchableOpacity>
+            <TouchableOpacity disabled={isTimeout} style={isTimeout && styles.disabled} onPress={() => startTimeout("B")}><Text style={styles.btn}>T ({timeoutsB})</Text></TouchableOpacity>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000", flexDirection: "row", justifyContent: "space-around", alignItems: "center", padding: 10 },
+  container: { flex: 1, backgroundColor: "#000", flexDirection: "column" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingBottom: 4,
+    minHeight: HEADER_H,
+  },
+  timerArea: { flexDirection: "row", alignItems: "center" },
+  timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
+  timerDisplay: { color: "#fff", fontSize: 20, fontWeight: "bold" },
+  burger: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8, minWidth: 44, minHeight: 44, justifyContent: "center" },
+  burgerText: { fontSize: 26, color: "white" },
+  timeoutBanner: {
+    backgroundColor: "rgba(255,200,0,0.15)",
+    paddingVertical: 4,
+    alignItems: "center",
+  },
+  timeoutText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  teamsRow: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
   teamBox: { alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
-  score: { color: "#fff", fontSize: 120, fontWeight: "bold" },
-  row: { flexDirection: "row", gap: 10, marginTop: 10 },
-  burger: { position: "absolute", top: 30, left: "48%", zIndex: 10 },
-  timerTopLeft: { position: "absolute", top: 30, left: 20, color: "#fff", fontSize: 20, fontWeight: "bold" },
-  timerStart: { color: "#0f0", fontSize: 20, fontWeight: "bold" },
-  timeoutText: { position: "absolute", bottom: 20, width: "100%", textAlign: "center", color: "#fff", fontSize: 24, fontWeight: "bold" },
+  score: { color: "#fff", fontWeight: "bold" },
+  row: { flexDirection: "row", gap: 10 },
+  btn: { fontSize: 18, color: "#fff", backgroundColor: "#444", paddingVertical: 13, paddingHorizontal: 10, borderRadius: 8 },
+  disabled: { opacity: 0.4 },
   inputTitle: { fontSize: 12, color: "#fff", marginBottom: 2, textAlign: "center" },
   input: { backgroundColor: "#333", color: "#fff", padding: 10, borderRadius: 6, marginBottom: 10 },
-  btn: { fontSize: 18, color: "#fff", backgroundColor: "#444", padding: 10, borderRadius: 8 },
   switchBtn: { padding: 10, backgroundColor: "#555", borderRadius: 6, marginBottom: 10 },
   switchText: { color: "#fff", textAlign: "center" },
-  undoBtn: { padding: 4, opacity: 0.7 },
-  toast: {
-    position: "absolute",
-    bottom: 60,
-    alignSelf: "center",
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  toastText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 });

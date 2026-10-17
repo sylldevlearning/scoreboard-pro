@@ -3,19 +3,13 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
-// Mock expo-av
-jest.mock("expo-av", () => ({
-  Audio: {
-    Sound: {
-      createAsync: jest.fn().mockResolvedValue({
-        sound: {
-          playAsync: jest.fn().mockResolvedValue(undefined),
-          unloadAsync: jest.fn().mockResolvedValue(undefined),
-        },
-      }),
-    },
-    setAudioModeAsync: jest.fn(),
-  },
+// Mock expo-audio
+jest.mock("expo-audio", () => ({
+  useAudioPlayer: jest.fn(() => ({
+    play: jest.fn(),
+    seekTo: jest.fn().mockResolvedValue(undefined),
+    remove: jest.fn(),
+  })),
 }));
 
 // Mock expo-router
@@ -37,6 +31,10 @@ jest.mock("react-native-google-mobile-ads", () => ({
   BannerAdSize: { BANNER: "BANNER" },
   TestIds: { BANNER: "ca-app-pub-test" },
   MobileAds: () => ({ initialize: jest.fn() }),
+  AdsConsent: {
+    gatherConsent: jest.fn().mockResolvedValue({}),
+    getConsentInfo: jest.fn().mockResolvedValue({ canRequestAds: true }),
+  },
 }));
 
 // Silence act() warnings from async timers in hooks tests

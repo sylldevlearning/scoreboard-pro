@@ -98,7 +98,7 @@ describe("useGameTimer", () => {
   });
 
   it("interval is cleared on unmount (no leak)", () => {
-    const clearSpy = jest.spyOn(global, "clearInterval");
+    const clearSpy = jest.spyOn(globalThis, "clearInterval");
     const { result, unmount } = renderHook(() => useGameTimer());
     act(() => { result.current.start(5); });
     unmount();
