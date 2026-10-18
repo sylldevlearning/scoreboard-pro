@@ -14,6 +14,7 @@ import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import {
   applyPoint,
@@ -175,10 +176,13 @@ export default function TennisScore() {
         </Pressable>
       </Modal>
 
-      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
-        <MaterialIcons name="sports-tennis" size={26} color="white" />
-        <Text style={styles.burgerText}>☰</Text>
-      </TouchableOpacity>
+      <View style={styles.burger}>
+        <RotateButton />
+        <TouchableOpacity style={styles.burgerBtn} onPress={() => setShowModal(true)}>
+          <MaterialIcons name="sports-tennis" size={26} color="white" />
+          <Text style={styles.burgerText}>☰</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={[styles.scoresWrapper, isLandscape && styles.scoresWrapperLandscape]}>
         <TeamPanel
@@ -234,8 +238,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  // Leaves room at the bottom for the rotation button of the root layout.
-  scoresWrapperLandscape: { alignItems: "stretch", gap: 16, marginTop: 40, paddingBottom: 44 },
+  scoresWrapperLandscape: { alignItems: "stretch", gap: 16, marginTop: 40, paddingBottom: 8 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   teamNameLandscape: { marginBottom: 0 },
   scoreContainer: { justifyContent: "center", alignItems: "center", marginVertical: 20 },
@@ -252,6 +255,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  burgerBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   burger: {
     position: "absolute",
     top: 10,

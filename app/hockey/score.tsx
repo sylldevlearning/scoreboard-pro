@@ -16,6 +16,7 @@ import HockeyPenaltyButtons from "@/components/HockeyPenaltyButtons";
 import HockeyPenaltyList from "@/components/HockeyPenaltyList";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
 import {
@@ -211,13 +212,13 @@ export default function HockeyScore() {
       </SettingsModal>
 
       {/* Burger — right corner, clear of centered timerArea */}
-      <TouchableOpacity
-        style={[styles.burger, isLandscape && styles.burgerLandscape]}
-        onPress={() => setShowModal(true)}
-      >
-        <MaterialCommunityIcons name="hockey-sticks" size={26} color="white" />
-        <Text style={styles.burgerText}>☰</Text>
-      </TouchableOpacity>
+      <View style={[styles.burger, isLandscape && styles.burgerLandscape]}>
+        <RotateButton />
+        <TouchableOpacity style={styles.burgerBtn} onPress={() => setShowModal(true)}>
+          <MaterialCommunityIcons name="hockey-sticks" size={26} color="white" />
+          <Text style={styles.burgerText}>☰</Text>
+        </TouchableOpacity>
+      </View>
 
       {!isLandscape && clock}
       <View style={[styles.teamsRow, isLandscape && styles.teamsRowLandscape]}>
@@ -289,13 +290,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
   },
-  // Leaves room at the bottom for the rotation button of the root layout.
-  teamsRowLandscape: { alignItems: "stretch", gap: 16, paddingBottom: 44 },
+  teamsRowLandscape: { alignItems: "stretch", gap: 16, paddingBottom: 8 },
   teamName: { fontSize: 22, fontWeight: "bold", color: "#fff" },
   playersOnIce: { fontSize: 13, color: "#aaa" },
   score: { color: "#fff", fontWeight: "bold" },
   burger: { position: "absolute", top: 30, right: "3%", zIndex: 10, flexDirection: "row", alignItems: "center", gap: 4 },
   burgerLandscape: { top: 4 },
+  burgerBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   burgerText: { fontSize: 26, color: "white" },
   timerArea: { alignItems: "center", marginBottom: 8 },
   timerAreaLandscape: { justifyContent: "center", marginBottom: 0, maxWidth: 220 },

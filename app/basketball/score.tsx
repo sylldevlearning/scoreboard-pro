@@ -13,6 +13,7 @@ import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import { useGameTimer } from "@/hooks/useGameTimer";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import { applyScoreDelta } from "@/utils/scoring/common";
 
@@ -160,6 +161,7 @@ export default function BasketScore() {
           )}
         </View>
         <View style={{ flex: 1 }} />
+        <RotateButton />
         <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
           <MaterialCommunityIcons name="basketball-hoop-outline" size={26} color="white" />
           <Text style={styles.burgerText}>☰</Text>
@@ -235,8 +237,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  // Leaves room at the bottom for the rotation button of the root layout.
-  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 44 },
+  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 8 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff", marginBottom: 10 },
   score: { color: "#fff", fontWeight: "bold" },
   row: { flexDirection: "row", gap: 10 },

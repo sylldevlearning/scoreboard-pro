@@ -19,6 +19,7 @@ import CardTracker from "@/components/CardTracker";
 import CardActionButtons from "@/components/CardActionButtons";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import { getSetTarget, isMatchWon, isSetWon } from "@/utils/scoring/volleyball";
 
@@ -250,6 +251,7 @@ export default function VolleyballScore() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: isPortrait ? 30 : 6 }]}>
         <View style={{ flex: 1 }} />
+        <RotateButton />
         <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
           <FontAwesome5 name="volleyball-ball" size={26} color="white" />
           <Text style={styles.burgerText}>☰</Text>
@@ -342,8 +344,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
-  // Leaves room at the bottom for the rotation button of the root layout.
-  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 44 },
+  teamsRowLandscape: { alignItems: "stretch", gap: 24, paddingHorizontal: 16, paddingBottom: 8 },
   teamName: { fontSize: 24, fontWeight: "bold", color: "#fff" },
   scoreContainer: { flexGrow: 1, justifyContent: "center" },
   score: { color: "#fff", fontWeight: "bold" },

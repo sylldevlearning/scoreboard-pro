@@ -12,6 +12,7 @@ import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import { applyInningScore, emptyInnings, parseInningsInput, totalRuns } from "@/utils/scoring/baseball";
 
@@ -106,10 +107,13 @@ export default function BaseballScore() {
         />
       </SettingsModal>
 
-      <TouchableOpacity style={styles.burger} onPress={() => setShowModal(true)}>
-        <MaterialCommunityIcons name="baseball-bat" size={44} color="white" />
-        <Text style={styles.burgerIcon}>☰</Text>
-      </TouchableOpacity>
+      <View style={styles.burger}>
+        <RotateButton />
+        <TouchableOpacity onPress={() => setShowModal(true)}>
+          <MaterialCommunityIcons name="baseball-bat" size={44} color="white" />
+          <Text style={styles.burgerIcon}>☰</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView horizontal style={{ marginTop: isPortrait ? 70 : 50 }} contentContainerStyle={isLandscape && styles.tableLandscape}>
         <View>
@@ -157,6 +161,9 @@ const styles = StyleSheet.create({
     top: 30,
     right: "5%",
     zIndex: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   burgerIcon: {
     fontSize: 40,

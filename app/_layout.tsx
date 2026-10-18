@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Slot, usePathname } from "expo-router";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { View, StyleSheet, Platform, useWindowDimensions } from "react-native";
+import { ContentSizeContext } from "@/hooks/useScoreLayout";
 
 // react-native-google-mobile-ads requires a compiled native binary.
 // In Expo Go / web the TurboModule doesn't exist → load dynamically so the app
@@ -56,6 +56,11 @@ const bannerUnitId =
 export default function RootLayout() {
   const pathname = usePathname();
   const [canShowAds, setCanShowAds] = useState(false);
+  const [contentSize, setContentSize] = useState<{ width: number; height: number } | null>(null);
+  const { width, height } = useWindowDimensions();
+  // In landscape the adaptive banner is much taller than in portrait; the
+  // fixed 320×50 one leaves more room for the scores.
+  const bannerSize = width > height ? BannerAdSize?.BANNER : BannerAdSize?.ANCHORED_ADAPTIVE_BANNER;
 
   // Consent first, then initialize the SDK and load ads.
   useEffect(() => {
@@ -90,44 +95,25 @@ export default function RootLayout() {
     applyOrientation();
   }, [pathname]);
 
-  const toggleOrientation = useCallback(async () => {
-    const current = await ScreenOrientation.getOrientationLockAsync();
-    const isLandscape =
-      current === ScreenOrientation.OrientationLock.LANDSCAPE ||
-      current === ScreenOrientation.OrientationLock.LANDSCAPE_LEFT ||
-      current === ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT;
-
-    await ScreenOrientation.lockAsync(
-      isLandscape
-        ? ScreenOrientation.OrientationLock.PORTRAIT
-        : ScreenOrientation.OrientationLock.LANDSCAPE
-    );
-  }, []);
-
   return (
     <View style={styles.root}>
-      <View style={styles.content}>
-        <Slot />
+      <View
+        style={styles.content}
+        onLayout={(e) => {
+          const { width: w, height: h } = e.nativeEvent.layout;
+          setContentSize({ width: w, height: h });
+        }}
+      >
+        <ContentSizeContext.Provider value={contentSize}>
+          <Slot />
+        </ContentSizeContext.Provider>
       </View>
 
       {canShowAds && BannerAd && BannerAdSize ? (
         <View style={styles.bannerContainer}>
-          <BannerAd
-            unitId={bannerUnitId}
-            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-          />
+          <BannerAd key={bannerSize} unitId={bannerUnitId} size={bannerSize} />
         </View>
       ) : null}
-
-      <View pointerEvents="box-none" style={styles.overlay}>
-        <TouchableOpacity style={styles.rotationBtn} onPress={toggleOrientation}>
-          <MaterialCommunityIcons
-            name="phone-rotate-portrait"
-            size={24}
-            color="#5e5555"
-          />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -135,26 +121,14 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "#000",
   },
   content: {
     flex: 1,
   },
   bannerContainer: {
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#000",
     paddingBottom: Platform.OS === "ios" ? 20 : 0,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: "flex-end",
-    alignItems: "flex-end",
-    padding: Platform.OS === "android" ? 20 : 30,
-    // Le paddingBottom laisse la place au banner
-    paddingBottom: Platform.OS === "android" ? 80 : 90,
-  },
-  rotationBtn: {
-    borderRadius: 24,
-    padding: 10,
-    elevation: 5,
   },
 });

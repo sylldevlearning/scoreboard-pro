@@ -13,6 +13,7 @@ import { usePersistedScore } from "@/hooks/usePersistedScore";
 import { HEADER_H, useScoreLayout } from "@/hooks/useScoreLayout";
 import ResumeModal from "@/components/ResumeModal";
 import SettingsModal from "@/components/SettingsModal";
+import RotateButton from "@/components/RotateButton";
 import TeamPanel from "@/components/TeamPanel";
 import { addWicket, correctWicket, getChaseResult, getFinalResult, nextBattingTeam } from "@/utils/scoring/cricket";
 import { applyScoreDelta } from "@/utils/scoring/common";
@@ -149,10 +150,13 @@ export default function CricketScore() {
       />
 
       {/* Burger */}
-      <TouchableOpacity style={[styles.burger, isLandscape && styles.burgerLandscape]} onPress={() => setShowModal(true)}>
-        <MaterialCommunityIcons name="cricket" size={40} color="white" />
-        <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
-      </TouchableOpacity>
+      <View style={[styles.burger, isLandscape && styles.burgerLandscape]}>
+        <TouchableOpacity style={isLandscape && styles.burgerBtnLandscape} onPress={() => setShowModal(true)}>
+          <MaterialCommunityIcons name="cricket" size={40} color="white" />
+          <Text style={{ fontSize: 40, color: "white" }}>☰</Text>
+        </TouchableOpacity>
+        <RotateButton />
+      </View>
 
       {/* MODAL paramètres */}
       <SettingsModal visible={showModal} onClose={() => setShowModal(false)} onReset={resetMatch}>
@@ -316,10 +320,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   burgerLandscape: { top: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  burgerBtnLandscape: { flexDirection: "row", alignItems: "center", gap: 6 },
   containerLandscape: { padding: 12 },
   teamsColumn: { flex: 1, alignSelf: "stretch", justifyContent: "space-around" },
-  // Leaves room at the bottom for the rotation button of the root layout.
-  teamsRowLandscape: { flex: 1, alignSelf: "stretch", flexDirection: "row", gap: 16, paddingBottom: 44 },
+  teamsRowLandscape: { flex: 1, alignSelf: "stretch", flexDirection: "row", gap: 16, paddingBottom: 8 },
   centerCol: { justifyContent: "center", alignItems: "center", gap: 16, maxWidth: 200 },
   teamName: { color: "#fff", fontSize: 24, fontWeight: "bold" },
   score: { color: "#fff", fontSize: 28 },
